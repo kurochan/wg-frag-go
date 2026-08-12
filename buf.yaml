@@ -1,0 +1,10 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - MINIMAL
+  except:
+    # Go import paths intentionally follow repository layout rather than the
+    # protobuf package hierarchy.
+    - PACKAGE_DIRECTORY_MATCH

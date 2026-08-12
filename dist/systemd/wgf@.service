@@ -1,0 +1,15 @@
+[Unit]
+Description=wg-frag-go tunnel for %i
+Documentation=https://github.com/kurochan/wg-frag-go
+After=network-online.target nss-lookup.target
+Wants=network-online.target nss-lookup.target
+PartOf=wgf.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/wgf quick up %i
+ExecStop=/usr/bin/wgf quick down %i
+
+[Install]
+WantedBy=multi-user.target

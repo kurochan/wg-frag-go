@@ -1,0 +1,6 @@
+[Unit]
+Description=wg-frag-go tunnels
+Documentation=https://github.com/kurochan/wg-frag-go
+
+[Install]
+WantedBy=multi-user.target

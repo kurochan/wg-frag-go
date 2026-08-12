@@ -1,0 +1,66 @@
+version: "2"
+
+linters:
+  default: fast
+  disable:
+    - decorder
+    - depguard
+    - embeddedstructfieldcheck
+    - funcorder
+    - gocognit
+    - gocyclo
+    - godot
+    - gomodguard
+    - gomodguard_v2
+    - grouper
+    - lll
+    - maintidx
+    - mnd
+    - nlreturn
+    - tagalign
+    - testpackage
+    - wsl
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - loggercheck
+    - nilerr
+    - nilnesserr
+    - sloglint
+    - staticcheck
+
+  settings:
+    cyclop:
+      # quick up and ApplyConfig are transaction coordinators; keeping their
+      # control flow together is clearer than splitting every cleanup step.
+      max-complexity: 40
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    funlen:
+      lines: 200
+      statements: 120
+    nestif:
+      min-complexity: 12
+    staticcheck:
+      checks:
+        - all
+        # Config field names and CLI usage errors intentionally preserve their
+        # user-facing spelling and punctuation.
+        - -ST1005
+
+  exclusions:
+    rules:
+      - path: "_test\\.go$"
+        linters:
+          - dupl
+          - cyclop
+          - funlen
+          - nestif
+
+formatters:
+  enable:
+    - gofmt

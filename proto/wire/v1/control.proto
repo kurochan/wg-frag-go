@@ -1,0 +1,97 @@
+edition = "2024";
+
+package wgf.protocol.wire.v1;
+
+option go_package = "github.com/kurochan/wg-frag-go/proto/wire/v1;wirev1";
+
+// Control is carried inside a standalone WGF CONTROL carrier frame.
+message Control {
+  // Non-zero and unique within control_epoch.
+  uint64 message_id = 1;
+  // Responses set this to the request message_id; requests set zero.
+  uint64 reply_to = 2;
+  // Non-zero random value generated per process and send direction.
+  uint64 control_epoch = 3;
+  // Used only by MtuProbe to reach a candidate carrier payload size.
+  bytes padding = 4;
+
+  oneof body {
+    CapabilitiesHello capabilities_hello = 10;
+    MtuProbe mtu_probe = 11;
+    MtuProbeAck mtu_probe_ack = 12;
+    Ping ping = 13;
+    Pong pong = 14;
+    CapabilitiesAck capabilities_ack = 15;
+    ResetSequence reset_sequence = 16;
+    ResetSequenceAck reset_sequence_ack = 17;
+    PeerMTU peer_mtu = 18;
+    PeerMTUAck peer_mtu_ack = 19;
+    StateSyncRequired state_sync_required = 20;
+  }
+}
+
+enum ResultCode {
+  RESULT_CODE_UNSPECIFIED = 0;
+  RESULT_CODE_ACCEPTED = 1;
+  RESULT_CODE_INCOMPATIBLE_VERSION = 2;
+  RESULT_CODE_MISSING_REQUIRED_FEATURE = 3;
+  RESULT_CODE_INVALID_PARAMETER = 4;
+  RESULT_CODE_SESSION_COLLISION = 5;
+}
+
+message CapabilitiesHello {
+  uint32 data_protocol_version = 1;
+  uint32 max_fragments = 2;
+  uint32 max_carrier_payload = 3;
+  uint64 supported_feature_bits = 4;
+  uint64 required_feature_bits = 5;
+  uint32 reassembly_lifetime_ms = 6;
+}
+
+message CapabilitiesAck {
+  uint32 selected_data_protocol_version = 1;
+  uint64 selected_feature_bits = 2;
+  ResultCode result = 3;
+}
+
+message MtuProbe {}
+
+message MtuProbeAck {
+  uint32 received_probe_payload_size = 1;
+}
+
+message ResetSequence {
+  // Valid range: 1..65535.
+  uint32 data_session_id = 1;
+}
+
+message ResetSequenceAck {
+  uint32 data_session_id = 1;
+  ResultCode result = 2;
+}
+
+message PeerMTU {
+  uint32 inner_mtu = 1;
+}
+
+message PeerMTUAck {
+  uint32 inner_mtu = 1;
+  ResultCode result = 2;
+}
+
+message Ping {
+  uint32 sequence = 1;
+}
+
+message Pong {
+  uint32 sequence = 1;
+}
+
+message StateSyncRequired {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_UNKNOWN_DATA_SESSION = 1;
+  }
+  Reason reason = 1;
+  uint32 observed_data_session_id = 2;
+}

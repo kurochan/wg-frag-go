@@ -1,0 +1,12 @@
+version: v2
+inputs:
+  - directory: proto
+plugins:
+  - local: [go, tool, -modfile=tools/go.mod, protoc-gen-go]
+    out: proto
+    opt:
+      - paths=source_relative
+  - local: [go, tool, -modfile=tools/go.mod, protoc-gen-go-grpc]
+    out: proto
+    opt:
+      - paths=source_relative
