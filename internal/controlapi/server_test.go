@@ -121,8 +121,8 @@ func TestRemoveStaleSocketRejectsReplacedPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if os.SameFile(info, current) {
-		t.Fatal("replacement unexpectedly retained the stale socket identity")
+	if current.Mode()&os.ModeSocket != 0 {
+		t.Fatal("replacement unexpectedly remained a socket")
 	}
 	if err := verifyStaleSocketIdentity(path, info); err == nil {
 		t.Fatal("verifyStaleSocketIdentity accepted a replaced path")
