@@ -49,6 +49,37 @@ WGF carriers.
 The wire format and state-machine rules are documented in
 [`docs/protocol.md`](docs/protocol.md).
 
+## Performance characteristics
+
+The steady-state WGF data path is designed to generate virtually no GC
+pressure. Fragmentation, carrier packing, reassembly, and reordering use
+buffers allocated when the device and peer state are created, so forwarding
+normally performs no heap allocation.
+
+As a reference point, an 8-second TCP transfer over a multi-region Internet
+path between two four-vCPU Ubuntu 26.04 instances measured the following. The
+underlay PMTU was 1500 bytes and RTT was approximately 33–35 ms; no artificial
+packet loss was applied.
+
+| Path | Inner MTU | Average RTT | Single flow | Four flows |
+| --- | ---: | ---: | ---: | ---: |
+| Direct public path | — | 35.14 ms | 0.84 Gbps | 3.03 Gbps |
+| wireguard-go baseline | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
+| WGF | 1500 | 34.07 ms | 0.71 Gbps | 2.83 Gbps |
+| WGF | 3000 | 33.85 ms | 0.71 Gbps | 2.52 Gbps |
+| WGF | 6000 | 34.05 ms | 0.70 Gbps | 2.74 Gbps |
+| WGF | 9600 | 34.08 ms | 0.70 Gbps | 2.74 Gbps |
+
+These are implementation reference measurements, not hardware limits or a
+guarantee of Internet throughput. The WGF results stayed near 0.7 Gbps for a
+single flow while preserving the configured inner MTU; four parallel flows
+reached approximately 2.5–2.8 Gbps in this run. Cross-region observations,
+local namespace results, and the benchmark method are recorded in
+[`docs/benchmark.md`](docs/benchmark.md).
+
+The latency column is the measured end-to-end average RTT for each path, not
+additional WGF processing latency.
+
 ## Requirements
 
 The runtime targets Linux on amd64 and arm64. Building the binary

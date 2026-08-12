@@ -48,6 +48,34 @@ WireGuard セッション自体を確立できますが、WGF carrier は解釈�
 wire format と状態機械の規則は
 [`docs/protocol.md`](docs/protocol.md) に記載しています。
 
+## 性能特性
+
+定常状態の WGF データパスは、GC負荷をほぼ発生させない設計です。fragment分割、carrierへの
+packing、reassembly、reorderに使うバッファをdeviceとpeerの状態作成時に確保するため、
+通常の転送処理ではヒープ確保を行いません。
+
+参考値として、4 vCPUの Ubuntu 26.04 インスタンス2台をマルチリージョンのインターネット経路で
+接続し、8秒間の TCP 転送を測定しました。underlay PMTU は1500 bytes、RTTは約33〜35 msで、
+人工的なパケットロスは設定していません。
+
+| 経路 | 内側 MTU | 平均 RTT | 単一フロー | 4フロー |
+| --- | ---: | ---: | ---: | ---: |
+| 公開経路（直接） | — | 35.14 ms | 0.84 Gbps | 3.03 Gbps |
+| wireguard-go baseline | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
+| WGF | 1500 | 34.07 ms | 0.71 Gbps | 2.83 Gbps |
+| WGF | 3000 | 33.85 ms | 0.71 Gbps | 2.52 Gbps |
+| WGF | 6000 | 34.05 ms | 0.70 Gbps | 2.74 Gbps |
+| WGF | 9600 | 34.08 ms | 0.70 Gbps | 2.74 Gbps |
+
+これらは実装比較の参考測定であり、ハードウェア上限や一般的なインターネット経路の性能を
+保証するものではありません。この測定ではWGFは単一フローで約0.7 Gbpsを維持しながら
+設定した内側MTUを使用でき、4並列フローでは約2.5〜2.8 Gbpsでした。リージョン間の観測値、
+ローカルnamespaceの結果、測定方法は
+[`docs/benchmark.md`](docs/benchmark.md) に記載しています。
+
+表のレイテンシは経路ごとの実測エンドツーエンド平均 RTT であり、WGFの処理による追加遅延では
+ありません。
+
 ## 動作要件
 
 実行環境は Linux の amd64 と arm64 を対象とします。バイナリのビルドには Go 1.26.4
