@@ -96,6 +96,9 @@ sudo systemctl daemon-reload
 
 詳細な導入・運用手順は [`docs/install.md`](docs/install.md) を参照してください。
 
+Linux amd64 / arm64 向けのバイナリarchiveとDebian packageは
+[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) で配布します。
+
 protobuf の生成には `tools/go.mod` でバージョンを固定したツールを使用します。
 
 ```sh
@@ -141,6 +144,7 @@ carrier payload、PMTU探索、reassembly容量・有効期間、reorder、UDP s
 ```sh
 wgf genkey | tee private.key | wgf pubkey
 wgf genpsk
+wgf version
 wgf check --config /etc/wg-frag/wgf0.conf
 
 # フォアグラウンドデーモン

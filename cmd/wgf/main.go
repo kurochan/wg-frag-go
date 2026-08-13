@@ -13,6 +13,7 @@ import (
 
 	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/internal/version"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter"
 )
 
@@ -39,6 +40,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "help", "--help", "-h":
 		usage(stdout)
+		return nil
+	case "version", "--version", "-v":
+		fmt.Fprintf(stdout, "wgf %s\n", version.String())
 		return nil
 	case "genkey":
 		return genkey(args[1:], stdout)
@@ -102,6 +106,7 @@ func check(args []string, stdout, stderr io.Writer) error {
 func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "usage: wgf <command>")
 	fmt.Fprintln(writer, "\ncommands:")
+	fmt.Fprintln(writer, "  version  print the build version")
 	fmt.Fprintln(writer, "  genkey  generate a WireGuard private key")
 	fmt.Fprintln(writer, "  genpsk  generate a preshared key")
 	fmt.Fprintln(writer, "  pubkey  derive a WireGuard public key from standard input")

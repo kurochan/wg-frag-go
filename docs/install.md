@@ -14,7 +14,34 @@ is Linux 5.10 or newer; Linux 6.2 or newer is recommended for performance.
 /usr/share/doc/wg-frag-go/
 ```
 
-## Build and install
+## Install a GitHub Release
+
+Release assets are published for Linux amd64 and arm64. Download the archive
+and `checksums.txt` for the same version, then verify the archive before
+installing it:
+
+```sh
+sha256sum --check checksums.txt --ignore-missing
+tar -xzf wg-frag-go_<version>_linux_<arch>.tar.gz
+sudo install -m 0755 wgf /usr/bin/wgf
+sudo ln -sf wgf /usr/bin/wgf-quick
+sudo install -m 0644 dist/systemd/wgf@.service dist/systemd/wgf.target \
+  /usr/lib/systemd/system/
+sudo install -d -m 0700 /etc/wg-frag
+sudo systemctl daemon-reload
+```
+
+Alternatively, install the Debian package for the matching architecture:
+
+```sh
+sudo apt install ./wg-frag-go_<version>_linux_<arch>.deb
+```
+
+The Debian package installs `wgf`, the `wgf-quick` alias, systemd units, and
+the `/etc/wg-frag` directory. It does not enable or start a tunnel
+automatically.
+
+## Build and install from source
 
 ```sh
 make build          # ./bin/wgf

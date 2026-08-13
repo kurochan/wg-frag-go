@@ -102,6 +102,9 @@ sudo systemctl daemon-reload
 The complete installation and operations guide is
 [`docs/install.md`](docs/install.md).
 
+Prebuilt Linux amd64 and arm64 archives and Debian packages are published on
+the [GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
+
 Protobuf generation uses the pinned tools in `tools/go.mod`:
 
 ```sh
@@ -149,6 +152,7 @@ are managed internally and must not be added to the user configuration.
 ```sh
 wgf genkey | tee private.key | wgf pubkey
 wgf genpsk
+wgf version
 wgf check --config /etc/wg-frag/wgf0.conf
 
 # Foreground daemon

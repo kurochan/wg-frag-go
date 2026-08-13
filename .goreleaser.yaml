@@ -1,0 +1,94 @@
+version: 2
+
+project_name: wg-frag-go
+dist: .release
+
+before:
+  hooks:
+    - go mod download
+    - go tool -modfile=tools/go.mod buf generate
+    - git diff --exit-code -- proto
+
+builds:
+  - id: wgf
+    main: ./cmd/wgf
+    binary: wgf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/kurochan/wg-frag-go/internal/version.Version={{.Version}}
+      - -X github.com/kurochan/wg-frag-go/internal/version.Commit={{.Commit}}
+      - -X github.com/kurochan/wg-frag-go/internal/version.Date={{.Date}}
+
+archives:
+  - id: binaries
+    ids:
+      - wgf
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - README.ja.md
+      - dist/systemd/*
+
+nfpms:
+  - id: deb
+    ids:
+      - wgf
+    package_name: wg-frag-go
+    vendor: wg-frag-go contributors
+    homepage: https://github.com/kurochan/wg-frag-go
+    maintainer: wg-frag-go contributors
+    description: |-
+      WireGuard-based userspace VPN shim with fragmentation, packet packing,
+      and DPLPMTUD for large inner MTUs without underlay IP fragmentation.
+    license: MIT
+    formats:
+      - deb
+    section: net
+    priority: optional
+    contents:
+      - src: dist/systemd/wgf@.service
+        dst: /usr/lib/systemd/system/wgf@.service
+      - src: dist/systemd/wgf.target
+        dst: /usr/lib/systemd/system/wgf.target
+      - src: LICENSE
+        dst: /usr/share/doc/wg-frag-go/LICENSE
+      - src: README.md
+        dst: /usr/share/doc/wg-frag-go/README.md
+      - src: README.ja.md
+        dst: /usr/share/doc/wg-frag-go/README.ja.md
+      - src: docs/install.md
+        dst: /usr/share/doc/wg-frag-go/install.md
+      - dst: /etc/wg-frag
+        type: dir
+        file_info:
+          mode: 0700
+      - src: /usr/bin/wgf
+        dst: /usr/bin/wgf-quick
+        type: symlink
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+release:
+  prerelease: auto
