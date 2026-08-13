@@ -29,6 +29,17 @@ func TestRunHelp(t *testing.T) {
 	}
 }
 
+func TestRunVersion(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"version"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "wgf devel\n"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
+	}
+}
+
 func TestRunCheck(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "wgf0.conf")
