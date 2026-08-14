@@ -1,6 +1,6 @@
 module github.com/kurochan/wg-frag-go
 
-go 1.26.4
+go 1.26.0
 
 require (
 	github.com/vishvananda/netlink v1.3.1

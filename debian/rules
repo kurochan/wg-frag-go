@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=vendor
+export GOTOOLCHAIN = local
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	version="$$(dpkg-parsechangelog --show-field Version | sed 's/-[0-9][^-]*$$//')"; \
+	go build -trimpath -ldflags "-s -w -X github.com/kurochan/wg-frag-go/internal/version.Version=$$version -X github.com/kurochan/wg-frag-go/internal/version.Commit=ppa -X github.com/kurochan/wg-frag-go/internal/version.Date=ppa" -o wgf ./cmd/wgf
+
+override_dh_auto_test:
+	go test ./...
+
+override_dh_auto_install:
+	install -D -m 0755 wgf debian/wg-frag-go/usr/bin/wgf
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --no-stop-on-upgrade
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0700 debian/wg-frag-go/etc/wg-frag
+
+override_dh_auto_clean:
+	rm -f wgf
+	dh_auto_clean

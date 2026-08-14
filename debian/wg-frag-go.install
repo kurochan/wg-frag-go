@@ -1,0 +1,2 @@
+dist/systemd/wgf@.service usr/lib/systemd/system
+dist/systemd/wgf.target usr/lib/systemd/system

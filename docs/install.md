@@ -41,6 +41,20 @@ The Debian package installs `wgf`, the `wgf-quick` alias, systemd units, and
 the `/etc/wg-frag` directory. It does not enable or start a tunnel
 automatically.
 
+## Install from the Launchpad PPA
+
+The PPA targets Ubuntu 24.04 (noble) and newer supported Ubuntu series:
+
+```sh
+sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo apt update
+sudo apt install wg-frag-go
+```
+
+PPA packages are built from the Debian source package in this repository.
+They install the same files as the GitHub Release package and do not enable or
+start a tunnel automatically.
+
 ## Build and install from source
 
 ```sh

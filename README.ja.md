@@ -78,7 +78,7 @@ packing、reassembly、reorderに使うバッファをdeviceとpeerの状態作�
 
 ## 動作要件
 
-実行環境は Linux の amd64 と arm64 を対象とします。バイナリのビルドには Go 1.26.4
+実行環境は Linux の amd64 と arm64 を対象とします。バイナリのビルドには Go 1.26.0
 以降が必要です。interfaceの起動には通常、rootまたは TUN 作成、route/rule設定、
 UDP socket mark設定、socket buffer要求に必要な権限が必要です。
 
@@ -98,6 +98,17 @@ sudo systemctl daemon-reload
 
 Linux amd64 / arm64 向けのバイナリarchiveとDebian packageは
 [GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) で配布します。
+Ubuntu 24.04（noble）以降の対応series向けには
+[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go) からも
+インストールできます。
+
+```sh
+sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo apt update
+sudo apt install wg-frag-go
+```
+
+PPAとGitHubのpackageは、tunnelを自動でenableまたはstartしません。
 
 protobuf の生成には `tools/go.mod` でバージョンを固定したツールを使用します。
 

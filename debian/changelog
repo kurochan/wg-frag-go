@@ -1,0 +1,5 @@
+wg-frag-go (0.0.2~rc.1-1) noble; urgency=medium
+
+  * Package wg-frag-go for the Launchpad PPA.
+
+ -- kurochan <kuro@kurochan.org>  Thu, 13 Aug 2026 00:00:00 +0000

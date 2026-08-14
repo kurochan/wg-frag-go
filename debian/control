@@ -1,0 +1,16 @@
+Source: wg-frag-go
+Section: net
+Priority: optional
+Maintainer: kurochan <kuro@kurochan.org>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.26~)
+Standards-Version: 4.7.3
+Homepage: https://github.com/kurochan/wg-frag-go
+Rules-Requires-Root: no
+
+Package: wg-frag-go
+Architecture: any
+Depends: ${misc:Depends}
+Description: WireGuard-based userspace VPN shim with large inner MTU support
+ wg-frag-go is a userspace Layer 3 fragmentation and packing shim built
+ around wireguard-go. It keeps a large inner IP MTU over a smaller underlay
+ without changing the WireGuard handshake, encryption, or replay protection.

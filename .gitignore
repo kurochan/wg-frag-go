@@ -2,3 +2,14 @@
 /bin/
 /wgf
 /.release/
+/vendor/
+.DS_Store
+
+# Debian package build outputs.
+*.buildinfo
+*.changes
+*.deb
+*.dsc
+debian/files
+debian/wg-frag-go/
+

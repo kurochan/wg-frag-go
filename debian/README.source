@@ -1,0 +1,39 @@
+wg-frag-go is built for the Launchpad PPA with vendored Go dependencies.
+Launchpad builders do not provide unrestricted outbound network access, so the
+source package must contain the exact dependencies used by the build.
+
+The repository does not track `vendor/`; generate it only while preparing the
+source package as shown below.
+
+The oldest supported Ubuntu series is 24.04 (noble). Add
+`ppa:longsleep/golang-backports` as a dependency of the Launchpad PPA so the
+noble builder can satisfy `golang-go (>= 2:1.26~)`. The PPA settings page has
+an "Edit PPA dependencies" action for this. This is a build-time dependency;
+users installing `wg-frag-go` do not need to enable the Go backports PPA.
+
+Build the package for noble first. Because the binary is statically linked,
+the resulting binaries can be copied forward to newer supported Ubuntu
+series without recompilation.
+
+From a checkout containing the Debian directory, generate the vendored source
+package with:
+
+    go mod vendor
+    dpkg-buildpackage -S -sa -d
+    rm -rf vendor
+
+Upload the generated source changes file with:
+
+    dput ppa:wg-frag/wg-frag-go ../wg-frag-go_<version>_source.changes
+
+The GitHub Actions PPA job expects the following values in the `launchpad`
+Environment:
+
+* Environment secret `LAUNCHPAD_GPG_PRIVATE_KEY`: ASCII-armored private key
+  registered with Launchpad.
+* Environment secret `LAUNCHPAD_GPG_PASSPHRASE`: passphrase for that key.
+* Environment variable `LAUNCHPAD_GPG_KEY_ID`: full fingerprint or key ID.
+
+The job uses Launchpad's public PPA FTP upload endpoint, so no SSH private key
+is required. Keep the PPA environment protected if uploads should require
+manual approval.
