@@ -2,6 +2,9 @@
 
 Supported runtime targets are Linux amd64 and arm64. The correctness baseline
 is Linux 5.10 or newer; Linux 6.2 or newer is recommended for performance.
+The PPA targets Ubuntu series while they are in Canonical's standard support
+window. The currently published series are Ubuntu 22.04 (jammy), 24.04
+(noble), and 26.04 (resolute) LTS. EOL series are not backfilled.
 
 ## Installed files
 
@@ -43,7 +46,10 @@ automatically.
 
 ## Install from the Launchpad PPA
 
-The PPA targets Ubuntu 24.04 (noble) and newer supported Ubuntu series:
+The PPA currently targets Ubuntu 22.04 (jammy), 24.04 (noble), and 26.04
+(resolute). Non-LTS series are added while they remain in Canonical's standard
+support window. A series becomes installable after its package build has
+completed in Launchpad:
 
 ```sh
 sudo add-apt-repository ppa:wg-frag/wg-frag-go

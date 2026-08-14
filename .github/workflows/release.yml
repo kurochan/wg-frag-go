@@ -86,10 +86,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   ppa:
-    name: Publish Launchpad PPA source
+    name: Publish Launchpad PPA (${{ matrix.series }})
     needs: [verify, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        series:
+          - jammy
+          - noble
+          - resolute
+    env:
+      TARGET_SERIES: ${{ matrix.series }}
     environment: launchpad
     permissions:
       contents: read
@@ -126,18 +136,21 @@ jobs:
           test "$upstream_version" = "$expected_version"
           go mod vendor
           go test -mod=vendor ./...
+          printf '%s\n' "$debian_version" > "$RUNNER_TEMP/wgf-debian-version"
+          printf '%s\n' "$upstream_version" > "$RUNNER_TEMP/wgf-upstream-version"
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
 
           orig_root="$RUNNER_TEMP/wg-frag-go-$upstream_version"
-          orig_tar="../wg-frag-go_${upstream_version}.orig.tar.gz"
+          orig_tar="$RUNNER_TEMP/wg-frag-go_${upstream_version}.orig.tar.gz"
           rm -rf "$orig_root" "$orig_tar"
           mkdir -p "$orig_root"
           tar --exclude=./debian --exclude=./.git -cf - . | tar -xf - -C "$orig_root"
-          tar -czf "$orig_tar" -C "$RUNNER_TEMP" "wg-frag-go-$upstream_version"
+          tar --sort=name --mtime="@${source_date_epoch}" \
+            --owner=0 --group=0 --numeric-owner \
+            -cf - -C "$RUNNER_TEMP" "wg-frag-go-$upstream_version" | gzip -n > "$orig_tar"
           rm -rf "$orig_root"
 
-          dpkg-buildpackage -S -sa -d -us -uc
-
-      - name: Sign and upload source package
+      - name: Build, sign, and upload source packages
         env:
           DEBEMAIL: kuro@kurochan.org
           DEBFULLNAME: kurochan
@@ -148,10 +161,18 @@ jobs:
           set -eu
           umask 077
 
+          case "$TARGET_SERIES" in
+            jammy|noble|resolute) ;;
+            *)
+              echo "unsupported Ubuntu series: $TARGET_SERIES" >&2
+              exit 1
+              ;;
+          esac
+
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           export GPG_PASSPHRASE_FILE="$RUNNER_TEMP/launchpad-gpg-passphrase"
           signer="$RUNNER_TEMP/dpkg-gpg-sign"
-          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$GPG_PASSPHRASE_FILE" "$signer" vendor' EXIT
+          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$GPG_PASSPHRASE_FILE" "$signer" "$RUNNER_TEMP"/ppa-* vendor' EXIT
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
 
@@ -167,7 +188,40 @@ jobs:
           EOF
           chmod 700 "$signer"
 
-          changes_file="$(find .. -maxdepth 1 -type f -name '*_source.changes' -print -quit)"
+          base_version="$(cat "$RUNNER_TEMP/wgf-debian-version")"
+          upstream_version="$(cat "$RUNNER_TEMP/wgf-upstream-version")"
+          attempt="${GITHUB_RUN_ATTEMPT:-1}"
+          case "$attempt" in
+            ''|0|*[!0-9]*)
+              echo "invalid GITHUB_RUN_ATTEMPT: $attempt" >&2
+              exit 1
+              ;;
+          esac
+
+          series_version="${base_version}+${TARGET_SERIES}${attempt}"
+          build_root="$RUNNER_TEMP/ppa-$TARGET_SERIES"
+          work_root="$build_root/wg-frag-go"
+          rm -rf "$build_root"
+          mkdir -p "$work_root"
+          tar --exclude=./.git -cf - . | tar -xf - -C "$work_root"
+          cp "$RUNNER_TEMP/wg-frag-go_${upstream_version}.orig.tar.gz" "$build_root/"
+
+          changelog="$work_root/debian/changelog"
+          new_changelog="$changelog.new"
+          {
+            printf 'wg-frag-go (%s) %s; urgency=medium\n\n' "$series_version" "$TARGET_SERIES"
+            printf '  * Build for Ubuntu %s.\n\n' "$TARGET_SERIES"
+            printf ' -- %s <%s>  %s\n\n' "$DEBFULLNAME" "$DEBEMAIL" "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+            cat "$changelog"
+          } > "$new_changelog"
+          mv "$new_changelog" "$changelog"
+
+          (
+            cd "$work_root"
+            dpkg-buildpackage -S -sa -d -us -uc
+          )
+
+          changes_file="$(find "$build_root" -maxdepth 1 -type f -name '*_source.changes' -print -quit)"
           test -n "$changes_file"
           debsign -p"$signer" -k"$LAUNCHPAD_GPG_KEY_ID" "$changes_file"
           dput ppa:wg-frag/wg-frag-go "$changes_file"
