@@ -24,6 +24,16 @@ jobs:
       - name: Verify checked-out revision
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release tag must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N"
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
