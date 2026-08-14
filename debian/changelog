@@ -1,3 +1,10 @@
+wg-frag-go (0.0.3~rc.4-1) noble; urgency=medium
+
+  * Fix Launchpad PPA builds when sbuild provides a non-writable HOME by using
+    a build-local Go cache.
+
+ -- kurochan <kuro@kurochan.org>  Fri, 14 Aug 2026 00:00:00 +0000
+
 wg-frag-go (0.0.3~rc.3-1) noble; urgency=medium
 
   * Publish Launchpad PPA source packages for each supported Ubuntu series in

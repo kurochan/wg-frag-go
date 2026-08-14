@@ -4,6 +4,7 @@ export DH_VERBOSE = 1
 export CGO_ENABLED = 0
 export GOFLAGS = -mod=vendor
 export GOTOOLCHAIN = local
+export GOCACHE = $(CURDIR)/.cache/go-build
 
 %:
 	dh $@
@@ -26,5 +27,6 @@ override_dh_fixperms:
 	chmod 0700 debian/wg-frag-go/etc/wg-frag
 
 override_dh_auto_clean:
+	rm -rf .cache
 	rm -f wgf
 	dh_auto_clean
