@@ -135,6 +135,15 @@ jobs:
           test "$upstream_version" = "$expected_version"
           go mod vendor
           go test -mod=vendor ./...
+
+          orig_root="$RUNNER_TEMP/wg-frag-go-$upstream_version"
+          orig_tar="../wg-frag-go_${upstream_version}.orig.tar.gz"
+          rm -rf "$orig_root" "$orig_tar"
+          mkdir -p "$orig_root"
+          tar --exclude=./debian --exclude=./.git -cf - . | tar -xf - -C "$orig_root"
+          tar -czf "$orig_tar" -C "$RUNNER_TEMP" "wg-frag-go-$upstream_version"
+          rm -rf "$orig_root"
+
           dpkg-buildpackage -S -sa -d -us -uc
 
       - name: Sign and upload source package

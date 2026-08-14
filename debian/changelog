@@ -1,3 +1,9 @@
+wg-frag-go (0.0.3~rc.2-1) noble; urgency=medium
+
+  * Fix Launchpad source package generation.
+
+ -- kurochan <kuro@kurochan.org>  Fri, 14 Aug 2026 00:00:00 +0000
+
 wg-frag-go (0.0.3~rc.1-1) noble; urgency=medium
 
   * Prepare the 0.0.3 release candidate.
