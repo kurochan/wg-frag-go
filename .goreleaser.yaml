@@ -46,9 +46,9 @@ nfpms:
     ids:
       - wgf
     package_name: wg-frag-go
-    vendor: wg-frag-go contributors
+    vendor: kurochan
     homepage: https://github.com/kurochan/wg-frag-go
-    maintainer: wg-frag-go contributors
+    maintainer: kurochan <kuro@kurochan.org>
     description: |-
       WireGuard-based userspace VPN shim with fragmentation, packet packing,
       and DPLPMTUD for large inner MTUs without underlay IP fragmentation.

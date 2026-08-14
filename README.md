@@ -83,7 +83,7 @@ additional WGF processing latency.
 ## Requirements
 
 The runtime targets Linux on amd64 and arm64. Building the binary
-requires Go 1.26.4 or newer. Running an interface normally requires root or
+requires Go 1.26.0 or newer. Running an interface normally requires root or
 the capabilities needed to create a TUN device, configure routes and rules,
 set the UDP socket mark, and request socket buffers.
 
@@ -104,6 +104,17 @@ The complete installation and operations guide is
 
 Prebuilt Linux amd64 and arm64 archives and Debian packages are published on
 the [GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
+
+Ubuntu 24.04 (noble) and newer supported Ubuntu series are also available from the
+[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go):
+
+```sh
+sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo apt update
+sudo apt install wg-frag-go
+```
+
+The PPA and GitHub packages do not enable or start a tunnel automatically.
 
 Protobuf generation uses the pinned tools in `tools/go.mod`:
 
