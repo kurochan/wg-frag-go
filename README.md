@@ -105,8 +105,11 @@ The complete installation and operations guide is
 Prebuilt Linux amd64 and arm64 archives and Debian packages are published on
 the [GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
 
-Ubuntu 24.04 (noble) and newer supported Ubuntu series are also available from the
-[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go):
+Packages for the currently supported Ubuntu series—22.04 (jammy), 24.04
+(noble), and 26.04 (resolute)—are also available from the
+[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go).
+Non-LTS series are added while they remain in Canonical's standard support
+window:
 
 ```sh
 sudo add-apt-repository ppa:wg-frag/wg-frag-go

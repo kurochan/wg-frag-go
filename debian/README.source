@@ -5,15 +5,24 @@ source package must contain the exact dependencies used by the build.
 The repository does not track `vendor/`; generate it only while preparing the
 source package as shown below.
 
-The oldest supported Ubuntu series is 24.04 (noble). Add
-`ppa:longsleep/golang-backports` as a dependency of the Launchpad PPA so the
-noble builder can satisfy `golang-go (>= 2:1.26~)`. The PPA settings page has
-an "Edit PPA dependencies" action for this. This is a build-time dependency;
-users installing `wg-frag-go` do not need to enable the Go backports PPA.
+The PPA targets Ubuntu series while they are in Canonical's standard support
+window. The currently configured series are 22.04 (jammy), 24.04 (noble), and
+26.04 (resolute). Each series receives its own source build. The version
+suffixes are `+jammy1`, `+noble1`, and `+resolute1`; increment the trailing
+number when the same release is rebuilt. Launchpad requires a distinct version
+for each series, and the GitHub Actions PPA job generates these entries
+automatically. EOL series are not backfilled.
 
-Build the package for noble first. Because the binary is statically linked,
-the resulting binaries can be copied forward to newer supported Ubuntu
-series without recompilation.
+Add `ppa:longsleep/golang-backports` as a PPA dependency so the jammy builder
+can satisfy `golang-go (>= 2:1.26~)`. The PPA settings page has an "Edit PPA
+dependencies" action for this. This is a build-time dependency; users
+installing `wg-frag-go` do not need to enable the Go backports PPA.
+
+The binary is statically linked and the package has no series-specific runtime
+dependencies. The source package is rebuilt for each target series so that
+Launchpad validates the build dependencies in that series. Use a new package
+version for every release; Launchpad does not allow reusing a version that was
+already published in the PPA.
 
 From a checkout containing the Debian directory, generate the vendored source
 package with:
@@ -22,9 +31,13 @@ package with:
     dpkg-buildpackage -S -sa -d
     rm -rf vendor
 
-Upload the generated source changes file with:
+Upload each generated source changes file with:
 
     dput ppa:wg-frag/wg-frag-go ../wg-frag-go_<version>_source.changes
+
+The GitHub Actions job performs this upload for all supported series. On a
+workflow rerun, `GITHUB_RUN_ATTEMPT` increments the series suffix (`+jammy1`,
+then `+jammy2`, for example).
 
 The GitHub Actions PPA job expects the following values in the `launchpad`
 Environment:
