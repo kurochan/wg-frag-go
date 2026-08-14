@@ -1,6 +1,6 @@
 module github.com/kurochan/wg-frag-go/tools
 
-go 1.26.4
+go 1.26.0
 
 tool (
 	github.com/bufbuild/buf/cmd/buf
