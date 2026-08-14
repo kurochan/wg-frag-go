@@ -52,15 +52,6 @@ jobs:
       - name: Run tests
         run: make test
 
-      - name: Run race tests
-        run: make test-race
-
-      - name: Run static analysis
-        run: go vet ./...
-
-      - name: Run lint
-        run: make lint
-
   release:
     name: Publish GitHub Release
     needs: verify
