@@ -93,6 +93,7 @@ type State struct {
 	nextConfirmation      time.Time
 	blackholed            bool
 	srtt                  time.Duration
+	searchHint            uint32
 }
 
 // New returns a conservative state. BASE is immediately usable; callers only
@@ -121,10 +122,22 @@ func (s *State) Searching() bool { return s.pending || s.inFlight }
 // pass runs and the median is selected. Calling Start while a search runs
 // restarts it from BASE; traffic remains on the existing confirmed ceiling.
 func (s *State) Start(now time.Time) {
+	s.searchHint = 0
+	s.start(now, false)
+}
+
+// StartWithHint begins a fresh search using hint as its first candidate. The
+// hint is advisory only: BASE remains the confirmed payload, and a failed
+// hint falls back to the normal bounded search.
+func (s *State) StartWithHint(now time.Time, hint uint32) {
+	s.searchHint = hint
 	s.start(now, false)
 }
 
 func (s *State) start(now time.Time, refreshing bool) {
+	if refreshing {
+		s.searchHint = 0
+	}
 	s.results = 0
 	s.confirming = false
 	s.refreshing = refreshing
@@ -138,6 +151,7 @@ func (s *State) start(now time.Time, refreshing bool) {
 		s.confirmed = s.config.Base
 		s.pending = false
 		s.inFlight = false
+		s.searchHint = 0
 		s.nextRefresh = now.Add(s.config.RefreshInterval)
 		s.nextConfirmation = now.Add(s.config.ConfirmationInterval)
 		return
@@ -356,6 +370,12 @@ func (s *State) beginRound(now time.Time) {
 	s.bad = 0
 	s.candidateTries = 0
 	s.candidate = s.nextCandidate()
+	if hinted := s.canonicalCandidate(s.searchHint); hinted > s.low {
+		s.candidate = hinted
+	}
+	// A peer hint is one-shot. After this candidate, use the observed search
+	// bounds even when the hinted probe fails.
+	s.searchHint = 0
 	s.inFlight = false
 	if s.candidate == 0 {
 		s.finishRound(now)
@@ -452,6 +472,7 @@ func (s *State) finishRound(now time.Time) {
 		s.pending = true
 		return
 	}
+	s.searchHint = 0
 	s.refreshing = false
 	s.nextRefresh = now.Add(s.config.RefreshInterval)
 	s.nextConfirmation = now.Add(s.config.ConfirmationInterval)

@@ -68,6 +68,9 @@ message ResetSequence {
 message ResetSequenceAck {
   uint32 data_session_id = 1;
   ResultCode result = 2;
+  // Last carrier payload size successfully received from this peer. This is
+  // only a PMTU search hint; it does not confirm the new path.
+  uint32 last_received_carrier_payload = 3;
 }
 
 message PeerMTU {

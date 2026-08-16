@@ -219,6 +219,14 @@ queue; overflow drops the oldest packet. Control retries start at 200 ms and
 use exponential backoff with full jitter, capped at 60 seconds. A valid CONTROL
 message clears the backoff.
 
+An accepted `ResetSequenceAck` may include the most recent carrier payload that
+the responder received successfully. This value is an advisory hint for the
+requester's next send-direction PMTU search. It is accepted only within the
+negotiated carrier ceiling and is ignored at or below BASE. The hint is used as
+the first raise candidate after BASE succeeds; it does not confirm PMTU and it
+never opens the DATA gate. If the hinted probe fails, the normal bounded search
+continues from the observed result.
+
 An unfragmented inner packet larger than the peer receive MTU is not converted
 to DATA. When possible, WGF returns IPv4 Fragmentation Needed or ICMPv6 Packet
 Too Big to the local TUN. In a route-only configuration without a suitable
@@ -254,6 +262,10 @@ Search procedure:
    pass and use the median.
 5. Promote a size to the current confirmed value only after a final confirmation
    of that same size succeeds.
+
+The initial search and periodic refresh use the same final-confirmation rule.
+The optional ResetSequence hint only changes the first raise candidate; it does
+not change the confirmation or fallback rules.
 
 The initial timeout is 2 seconds until Ping/Pong supplies an RTT sample. The
 measured SRTT is carried into the PMTU search, after which the timeout is

@@ -303,6 +303,50 @@ func TestDefaultCanonicalizationIsIdentity(t *testing.T) {
 	}
 }
 
+func TestStartWithHintUsesHintAsInitialCandidate(t *testing.T) {
+	t.Parallel()
+	s := mustState(t, 613, 4_000)
+	now := time.Unix(0, 0)
+	s.StartWithHint(now, 2_733)
+	probe, ok := s.Next(now)
+	if !ok || probe.PayloadSize != alignedPayload(2_733) {
+		t.Fatalf("initial probe = (%d, %t), want hinted payload %d", probe.PayloadSize, ok, alignedPayload(2_733))
+	}
+}
+
+func TestStartWithHintFallsBackAfterFailure(t *testing.T) {
+	t.Parallel()
+	s := mustState(t, 613, 4_000)
+	now := time.Unix(0, 0)
+	s.StartWithHint(now, 2_733)
+	probe, ok := s.Next(now)
+	if !ok || probe.PayloadSize != alignedPayload(2_733) {
+		t.Fatalf("initial probe = (%d, %t), want hinted payload %d", probe.PayloadSize, ok, alignedPayload(2_733))
+	}
+	if !s.Fail(probe.Attempt, now) {
+		t.Fatal("hinted probe failure was rejected")
+	}
+	next, ok := s.Next(now)
+	if !ok || next.PayloadSize >= probe.PayloadSize {
+		t.Fatalf("fallback probe = (%d, %t), want candidate below failed hint %d", next.PayloadSize, ok, probe.PayloadSize)
+	}
+}
+
+func TestStartWithHintIsNotReusedAfterRefresh(t *testing.T) {
+	t.Parallel()
+	s := mustState(t, 613, 2_000)
+	now := time.Unix(0, 0)
+	s.StartWithHint(now, 1_400)
+	completeSearch(t, s, &now, 1_400)
+	if !s.RefreshDue(s.NextRefresh()) {
+		t.Fatal("refresh did not start")
+	}
+	probe, ok := s.Next(s.NextRefresh())
+	if !ok || probe.PayloadSize == alignedPayload(1_400) {
+		t.Fatalf("refresh probe = (%d, %t), unexpectedly reused one-shot hint", probe.PayloadSize, ok)
+	}
+}
+
 func TestOutOfRangeCanonicalizationStopsSearchSafely(t *testing.T) {
 	t.Parallel()
 

@@ -160,6 +160,12 @@ type Engine struct {
 	baseRetryAt      time.Time
 	baseRetryAttempt uint
 
+	// lastReceivedCarrierPayload is an advisory PMTU hint for the peer's next
+	// send-direction search. It is intentionally separate from the local
+	// confirmed value because it describes the opposite direction.
+	lastReceivedCarrierPayload uint32
+	pmtuHint                   uint32
+
 	resetReplay     [resetReplayCapacity]resetReplayEntry
 	resetReplayNext int
 }
@@ -676,6 +682,7 @@ func (e *Engine) beginLocalExchange() ([]Outbound, error) {
 	// A fresh local epoch starts a fresh send-direction path gate. Any PMTU
 	// result from the previous epoch must not survive into the new BASE probe.
 	e.pmtu = nil
+	e.pmtuHint = 0
 	e.started = true
 	e.localEpoch = exchange.ControlEpoch
 	e.localMessageID = 0
@@ -703,6 +710,7 @@ func (e *Engine) handleCapabilitiesHello(message *wirev1.Control) ([]Outbound, e
 			e.remoteResponseID = 0
 			if previousRemoteEpoch != 0 {
 				e.pmtu = nil
+				e.pmtuHint = 0
 			}
 		}
 	}
@@ -799,7 +807,12 @@ func (e *Engine) handleReset(message *wirev1.Control) ([]Outbound, error) {
 	}
 	decision := e.state.ObserveResetSequence(message)
 	dataSessionID := message.GetResetSequence().GetDataSessionId()
-	ackBody := (&wirev1.ResetSequenceAck_builder{DataSessionId: &dataSessionID, Result: &decision.Result}).Build()
+	ackBuilder := wirev1.ResetSequenceAck_builder{DataSessionId: &dataSessionID, Result: &decision.Result}
+	if decision.Result == wirev1.ResultCode_RESULT_CODE_ACCEPTED && e.validPMTUHint(e.lastReceivedCarrierPayload) {
+		hint := e.lastReceivedCarrierPayload
+		ackBuilder.LastReceivedCarrierPayload = &hint
+	}
+	ackBody := ackBuilder.Build()
 	ack := buildControl(0, message.GetMessageId(), message.GetControlEpoch(), ackBody)
 	response, err := e.sendResponse(ack)
 	if err != nil {
@@ -826,6 +839,7 @@ func (e *Engine) handleResetAck(message *wirev1.Control) ([]Outbound, error) {
 		e.enterTerminalError(resetSequenceReason(result))
 		return nil, nil
 	}
+	e.pmtuHint = e.validatedPMTUHint(ack.GetLastReceivedCarrierPayload())
 	e.outstanding = outstandingRequest{}
 	return e.progress()
 }
@@ -954,6 +968,9 @@ func (e *Engine) handlePong(message *wirev1.Control) ([]Outbound, error) {
 func (e *Engine) handleMtuProbe(message *wirev1.Control, receivedSize uint32) ([]Outbound, error) {
 	if err := e.requireRemoteRequest(message); err != nil {
 		return nil, err
+	}
+	if e.validPMTUHint(receivedSize) {
+		e.lastReceivedCarrierPayload = receivedSize
 	}
 	response, err := e.sendResponse(buildControl(
 		0,
@@ -1303,8 +1320,28 @@ func (e *Engine) startPMTU() error {
 		search.ObserveRTT(e.srtt)
 	}
 	e.pmtu = search
-	e.pmtu.Start(e.now())
+	if hint := e.pmtuHint; hint != 0 {
+		e.pmtuHint = 0
+		e.pmtu.StartWithHint(e.now(), hint)
+	} else {
+		e.pmtu.Start(e.now())
+	}
 	return nil
+}
+
+func (e *Engine) validPMTUHint(payload uint32) bool {
+	return e.validatedPMTUHint(payload) != 0
+}
+
+func (e *Engine) validatedPMTUHint(payload uint32) uint32 {
+	if payload <= e.base {
+		return 0
+	}
+	ceiling := e.state.NegotiatedCarrierPayload()
+	if ceiling == 0 || payload > ceiling {
+		return 0
+	}
+	return payload
 }
 
 func (e *Engine) transportSize(payload uint32) int {
