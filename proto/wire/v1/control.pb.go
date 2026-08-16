@@ -1368,13 +1368,14 @@ func (b0 ResetSequence_builder) Build() *ResetSequence {
 }
 
 type ResetSequenceAck struct {
-	state                    protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_DataSessionId uint32                 `protobuf:"varint,1,opt,name=data_session_id,json=dataSessionId"`
-	xxx_hidden_Result        ResultCode             `protobuf:"varint,2,opt,name=result,enum=wgf.protocol.wire.v1.ResultCode"`
-	XXX_raceDetectHookData   protoimpl.RaceDetectHookData
-	XXX_presence             [1]uint32
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state                                 protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_DataSessionId              uint32                 `protobuf:"varint,1,opt,name=data_session_id,json=dataSessionId"`
+	xxx_hidden_Result                     ResultCode             `protobuf:"varint,2,opt,name=result,enum=wgf.protocol.wire.v1.ResultCode"`
+	xxx_hidden_LastReceivedCarrierPayload uint32                 `protobuf:"varint,3,opt,name=last_received_carrier_payload,json=lastReceivedCarrierPayload"`
+	XXX_raceDetectHookData                protoimpl.RaceDetectHookData
+	XXX_presence                          [1]uint32
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
 }
 
 func (x *ResetSequenceAck) Reset() {
@@ -1418,14 +1419,26 @@ func (x *ResetSequenceAck) GetResult() ResultCode {
 	return ResultCode_RESULT_CODE_UNSPECIFIED
 }
 
+func (x *ResetSequenceAck) GetLastReceivedCarrierPayload() uint32 {
+	if x != nil {
+		return x.xxx_hidden_LastReceivedCarrierPayload
+	}
+	return 0
+}
+
 func (x *ResetSequenceAck) SetDataSessionId(v uint32) {
 	x.xxx_hidden_DataSessionId = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 2)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 3)
 }
 
 func (x *ResetSequenceAck) SetResult(v ResultCode) {
 	x.xxx_hidden_Result = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 2)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 3)
+}
+
+func (x *ResetSequenceAck) SetLastReceivedCarrierPayload(v uint32) {
+	x.xxx_hidden_LastReceivedCarrierPayload = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 3)
 }
 
 func (x *ResetSequenceAck) HasDataSessionId() bool {
@@ -1442,6 +1455,13 @@ func (x *ResetSequenceAck) HasResult() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
+func (x *ResetSequenceAck) HasLastReceivedCarrierPayload() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
 func (x *ResetSequenceAck) ClearDataSessionId() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_DataSessionId = 0
@@ -1452,11 +1472,19 @@ func (x *ResetSequenceAck) ClearResult() {
 	x.xxx_hidden_Result = ResultCode_RESULT_CODE_UNSPECIFIED
 }
 
+func (x *ResetSequenceAck) ClearLastReceivedCarrierPayload() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_LastReceivedCarrierPayload = 0
+}
+
 type ResetSequenceAck_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	DataSessionId *uint32
 	Result        *ResultCode
+	// Last carrier payload size successfully received from this peer. This is
+	// only a PMTU search hint; it does not confirm the new path.
+	LastReceivedCarrierPayload *uint32
 }
 
 func (b0 ResetSequenceAck_builder) Build() *ResetSequenceAck {
@@ -1464,12 +1492,16 @@ func (b0 ResetSequenceAck_builder) Build() *ResetSequenceAck {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.DataSessionId != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 2)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 3)
 		x.xxx_hidden_DataSessionId = *b.DataSessionId
 	}
 	if b.Result != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 2)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 3)
 		x.xxx_hidden_Result = *b.Result
+	}
+	if b.LastReceivedCarrierPayload != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 3)
+		x.xxx_hidden_LastReceivedCarrierPayload = *b.LastReceivedCarrierPayload
 	}
 	return m0
 }
@@ -1954,10 +1986,11 @@ const file_wire_v1_control_proto_rawDesc = "" +
 	"\vMtuProbeAck\x12=\n" +
 	"\x1breceived_probe_payload_size\x18\x01 \x01(\rR\x18receivedProbePayloadSize\"7\n" +
 	"\rResetSequence\x12&\n" +
-	"\x0fdata_session_id\x18\x01 \x01(\rR\rdataSessionId\"t\n" +
+	"\x0fdata_session_id\x18\x01 \x01(\rR\rdataSessionId\"\xb7\x01\n" +
 	"\x10ResetSequenceAck\x12&\n" +
 	"\x0fdata_session_id\x18\x01 \x01(\rR\rdataSessionId\x128\n" +
-	"\x06result\x18\x02 \x01(\x0e2 .wgf.protocol.wire.v1.ResultCodeR\x06result\"&\n" +
+	"\x06result\x18\x02 \x01(\x0e2 .wgf.protocol.wire.v1.ResultCodeR\x06result\x12A\n" +
+	"\x1dlast_received_carrier_payload\x18\x03 \x01(\rR\x1alastReceivedCarrierPayload\"&\n" +
 	"\aPeerMTU\x12\x1b\n" +
 	"\tinner_mtu\x18\x01 \x01(\rR\binnerMtu\"c\n" +
 	"\n" +

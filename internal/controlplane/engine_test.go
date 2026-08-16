@@ -120,6 +120,9 @@ func TestDualEngineStartsPMTUSearchAfterBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Pretend B retained the last successful inbound probe from A across a
+	// local restart. A should use it only as the first post-BASE search hint.
+	b.lastReceivedCarrierPayload = 1_400
 	type delivery struct {
 		to    *Engine
 		frame []byte
@@ -129,12 +132,20 @@ func TestDualEngineStartsPMTUSearchAfterBase(t *testing.T) {
 		queue = append(queue, delivery{to: b, frame: output.Frame})
 	}
 	sawLargeProbe := false
+	firstLargeProbe := uint32(0)
+	sawResetHint := false
 	for steps := 0; len(queue) != 0 && steps < 500; steps++ {
 		item := queue[0]
 		queue = queue[1:]
 		message := decodeControlWithMax(t, item.frame, 2_000)
+		if item.to == a && message.GetResetSequenceAck() != nil && message.GetResetSequenceAck().GetLastReceivedCarrierPayload() == 1_400 {
+			sawResetHint = true
+		}
 		if message.GetMtuProbe() != nil && len(item.frame) > 613 {
 			sawLargeProbe = true
+			if firstLargeProbe == 0 && item.to == b {
+				firstLargeProbe = uint32(len(item.frame))
+			}
 		}
 		outputs, err := item.to.HandleInbound(item.frame)
 		if err != nil {
@@ -153,6 +164,9 @@ func TestDualEngineStartsPMTUSearchAfterBase(t *testing.T) {
 	}
 	if !sawLargeProbe {
 		t.Fatal("DPLPMTUD did not emit a padded probe")
+	}
+	if !sawResetHint || firstLargeProbe != 1_400 {
+		t.Fatalf("PMTU hint: reset_ack=%t first_large_probe=%d, want true/1400", sawResetHint, firstLargeProbe)
 	}
 	// Candidates are aligned to WireGuard's 16-byte padding, so a 2000-byte
 	// ceiling confirms the largest payload sharing its outer datagram size.
