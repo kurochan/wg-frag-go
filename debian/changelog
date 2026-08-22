@@ -1,3 +1,9 @@
+wg-frag-go (0.0.4-1) noble; urgency=medium
+
+  * Verify the Debian package version against the release tag before publishing.
+
+ -- kurochan <kuro@kurochan.org>  Sat, 22 Aug 2026 06:20:26 +0000
+
 wg-frag-go (0.0.3~rc.5-1) noble; urgency=medium
 
   * Add build target.

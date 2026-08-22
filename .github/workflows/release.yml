@@ -34,6 +34,21 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Debian package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          debian_version="$(sed -nE '1s/^wg-frag-go \(([^)]+)\) .*/\1/p' debian/changelog)"
+          test -n "$debian_version"
+          upstream_version="$(printf '%s' "$debian_version" | sed 's/-[0-9][^-]*$//')"
+          tag_version="${RELEASE_TAG#v}"
+          expected_version="$(printf '%s' "$tag_version" | sed -E 's/-([[:alnum:]]+)\./~\1./g')"
+          if [ "$upstream_version" != "$expected_version" ]; then
+            echo "::error::debian/changelog version ($upstream_version) does not match release tag ($expected_version)"
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
