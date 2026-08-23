@@ -68,8 +68,16 @@ nfpms:
         dst: /usr/share/doc/wg-frag-go/README.md
       - src: README.ja.md
         dst: /usr/share/doc/wg-frag-go/README.ja.md
+      - src: docs/configuration.md
+        dst: /usr/share/doc/wg-frag-go/docs/configuration.md
       - src: docs/install.md
-        dst: /usr/share/doc/wg-frag-go/install.md
+        dst: /usr/share/doc/wg-frag-go/docs/install.md
+      - src: docs/protocol.md
+        dst: /usr/share/doc/wg-frag-go/docs/protocol.md
+      - src: docs/threat-model.md
+        dst: /usr/share/doc/wg-frag-go/docs/threat-model.md
+      - src: examples/wgf0.conf.example
+        dst: /usr/share/doc/wg-frag-go/examples/wgf0.conf.example
       - dst: /etc/wg-frag
         type: dir
         file_info:

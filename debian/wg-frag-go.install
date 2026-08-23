@@ -1,2 +1,7 @@
 dist/systemd/wgf@.service usr/lib/systemd/system
 dist/systemd/wgf.target usr/lib/systemd/system
+docs/configuration.md usr/share/doc/wg-frag-go/docs
+docs/install.md usr/share/doc/wg-frag-go/docs
+docs/protocol.md usr/share/doc/wg-frag-go/docs
+docs/threat-model.md usr/share/doc/wg-frag-go/docs
+examples/wgf0.conf.example usr/share/doc/wg-frag-go/examples

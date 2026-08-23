@@ -1,5 +1,7 @@
 # wg-frag-go
 
+[English](README.md)
+
 `wg-frag-go` は、`wireguard-go` を基盤とするユーザー空間の L3
 フラグメント分割・パッキング shim です。WireGuard のハンドシェイク、Noise プロトコル、
 暗号化、鍵更新、エンドポイント移動、リプレイ保護を変更せずに、下位ネットワークより
@@ -61,7 +63,7 @@ packing、reassembly、reorderに使うバッファをdeviceとpeerの状態作�
 | 経路 | 内側 MTU | 平均 RTT | 単一フロー | 4フロー |
 | --- | ---: | ---: | ---: | ---: |
 | 公開経路（直接） | — | 35.14 ms | 0.84 Gbps | 3.03 Gbps |
-| wireguard-go baseline | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
+| Kernel WireGuard | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
 | WGF | 1500 | 34.07 ms | 0.71 Gbps | 2.83 Gbps |
 | WGF | 3000 | 33.85 ms | 0.71 Gbps | 2.52 Gbps |
 | WGF | 6000 | 34.05 ms | 0.70 Gbps | 2.74 Gbps |
@@ -143,8 +145,8 @@ PresharedKey = <base64-preshared-key>
 `MTU` は内側 TUN の MTU です。1280〜9612 bytes の範囲で指定し、現在の
 carrier payloadを超えるパケットは WGF がfragmentします。WGF固有の設定で、base / 最大
 carrier payload、PMTU探索、reassembly容量・有効期間、reorder、UDP socket bufferを
-調整できます。受け付ける範囲とプロトコル上の制限はパーサーと
-[`docs/protocol.md`](docs/protocol.md) を参照してください。
+調整できます。受け付ける値、既定値、チューニング指針は
+[`docs/configuration.md`](docs/configuration.md) を参照してください。
 
 `PresharedKey` は任意の32バイトWireGuard preshared keyです。`wgf genpsk`で生成できます。
 
@@ -175,10 +177,17 @@ sudo systemctl stop wgf@wgf0
 
 # 状態と設定
 wgf show
+wgf show all
+wgf show interfaces
 wgf show wgf0
+wgf show wgf0 fragment
 wgf show wgf0 path-mtu
 wgf show wgf0 stats
 wgf showconf wgf0
+wgf set wgf0 peer <base64-public-key> endpoint example.net:51820 allowed-ips 10.0.0.2/32
+wgf setconf wgf0 /etc/wg-frag/wgf0.conf
+wgf addconf wgf0 /etc/wg-frag/peers.conf
+wgf syncconf wgf0 /etc/wg-frag/wgf0.conf
 ```
 
 `wgf-quick` は `wgf quick` のaliasです。`wgf run` はinterfaceごとのフォアグラウンド
@@ -186,6 +195,11 @@ wgf showconf wgf0
 とrouteを設定します。`Table = auto` は WireGuard 互換の full-tunnel policy
 routing rule と endpoint route exemption を設定します。`Table = off` を指定すると
 route管理を呼び出し元へ委ねます。
+
+`show all` は稼働中の全local interfaceを照会し、`show interfaces` はその名前を一覧します。
+`fragment`、`path-mtu`、`stats` viewは、1 interfaceのfragment、PMTU、counterの詳細を表示します。
+`set` はpeerの項目を実行時に変更します。`setconf` は設定ファイルのpeer setで置換し、`addconf` は
+peerをmergeし、`syncconf` は既存sessionを維持したまま置換を適用します。
 
 ## ログと管理
 
@@ -236,7 +250,7 @@ make test-race
 ```
 
 fuzz targetでは、設定パーサー、inner IPパーサー、carrier / CONTROLデコーダー、receiver
-の入力処理を検証します。
+の入力処理、reassemblyのlifetime処理を検証します。
 
 ```sh
 make fuzz
