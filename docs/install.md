@@ -79,7 +79,10 @@ warns when the file is not mode 0600. The format is compatible with wg-quick:
 `Address` and `MTU` are runtime settings, while `Table`, `FwMark`, `PreUp`,
 `PostUp`, `PreDown`, `PostDown`, and `SaveConfig` are handled by `quick`.
 `DNS` is not supported and is ignored with a warning. WGF-specific keys such as
-`WGFSocketBuffer` are passed to the runtime.
+`WGFSocketBuffer` are passed to the runtime. See
+[`configuration.md`](configuration.md) for the complete setting reference and
+[`../examples/wgf0.conf.example`](../examples/wgf0.conf.example) for a
+commented starting point.
 
 ```ini
 [Interface]

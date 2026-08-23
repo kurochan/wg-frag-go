@@ -1,0 +1,29 @@
+# Copy to /etc/wg-frag/wgf0.conf, replace every placeholder, then run:
+#   sudo chmod 0600 /etc/wg-frag/wgf0.conf
+#   sudo wgf check --config /etc/wg-frag/wgf0.conf
+#   sudo wgf quick up wgf0
+
+[Interface]
+Address = 10.0.0.1/24
+PrivateKey = <base64-private-key>
+ListenPort = 51820
+MTU = 1500
+
+# WGFMTUDiscovery = auto
+# WGFMinCarrierPayload = 613
+# WGFMaxCarrierPayload = 65432
+# WGFReassemblySlots = 4096
+# WGFPeerReassemblySlots = auto
+# WGFReassemblyLifetime = 2s
+# WGFReorder = true
+# WGFReorderMaxDelay = 10ms
+# WGFSocketBuffer = 3145728
+# WGFWorkers = auto
+# WGFTUNQueues = auto
+
+[Peer]
+PublicKey = <base64-peer-public-key>
+Endpoint = peer.example.net:51820
+AllowedIPs = 10.0.0.2/32
+PersistentKeepalive = 25
+# PresharedKey = <base64-preshared-key>

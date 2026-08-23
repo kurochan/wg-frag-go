@@ -1,5 +1,7 @@
 # wg-frag-go
 
+[日本語](README.ja.md)
+
 `wg-frag-go` is a userspace Layer 3 fragmentation and packing shim built
 around `wireguard-go`. It preserves a large inner IP MTU over a smaller
 underlay without changing WireGuard's handshake, Noise protocol, encryption,
@@ -64,7 +66,7 @@ packet loss was applied.
 | Path | Inner MTU | Average RTT | Single flow | Four flows |
 | --- | ---: | ---: | ---: | ---: |
 | Direct public path | — | 35.14 ms | 0.84 Gbps | 3.03 Gbps |
-| wireguard-go baseline | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
+| Kernel WireGuard | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
 | WGF | 1500 | 34.07 ms | 0.71 Gbps | 2.83 Gbps |
 | WGF | 3000 | 33.85 ms | 0.71 Gbps | 2.52 Gbps |
 | WGF | 6000 | 34.05 ms | 0.70 Gbps | 2.74 Gbps |
@@ -151,8 +153,8 @@ PresharedKey = <base64-preshared-key>
 9612 bytes; WGF fragments packets that exceed the current carrier payload.
 WGF-specific settings control the base and maximum carrier payload, PMTU
 discovery, reassembly capacity and lifetime, reorder behavior, and UDP socket
-buffers. See the parser and [`docs/protocol.md`](docs/protocol.md) for the
-accepted ranges and protocol limits.
+buffers. See [`docs/configuration.md`](docs/configuration.md) for the accepted
+values, defaults, and tuning guidance.
 
 `PresharedKey` is optional and uses the standard 32-byte WireGuard preshared
 key format. Generate one with `wgf genpsk`.
@@ -184,10 +186,17 @@ sudo systemctl stop wgf@wgf0
 
 # Status and configuration
 wgf show
+wgf show all
+wgf show interfaces
 wgf show wgf0
+wgf show wgf0 fragment
 wgf show wgf0 path-mtu
 wgf show wgf0 stats
 wgf showconf wgf0
+wgf set wgf0 peer <base64-public-key> endpoint example.net:51820 allowed-ips 10.0.0.2/32
+wgf setconf wgf0 /etc/wg-frag/wgf0.conf
+wgf addconf wgf0 /etc/wg-frag/peers.conf
+wgf syncconf wgf0 /etc/wg-frag/wgf0.conf
 ```
 
 `wgf-quick` is an alias for `wgf quick`; `wgf run` remains a foreground
@@ -195,6 +204,13 @@ per-interface daemon. `wgf quick` creates the interface, starts the daemon,
 and applies addresses and routes. `Table = auto` provides the WireGuard-style
 full-tunnel policy-routing rules and endpoint-route exemption. `Table = off`
 leaves route management to the caller.
+
+`show all` queries every active local interface, while `show interfaces` lists
+their names. The `fragment`, `path-mtu`, and `stats` views expose fragmentation,
+PMTU, and counter details for one interface. `set` changes peer fields at
+runtime. `setconf` replaces the peer set from a configuration file, `addconf`
+merges its peers, and `syncconf` applies the replacement while preserving
+existing sessions.
 
 ## Logging and management
 
@@ -249,7 +265,7 @@ make test-race
 ```
 
 Fuzz targets cover configuration parsing, inner IP parsing, carrier and
-CONTROL decoding, and receiver input handling:
+CONTROL decoding, receiver input handling, and reassembly lifetime handling:
 
 ```sh
 make fuzz

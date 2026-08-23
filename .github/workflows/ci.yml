@@ -66,6 +66,9 @@ jobs:
       - name: Run race tests
         run: make test-race
 
+      - name: Run fuzz smoke tests
+        run: make fuzz
+
       - name: Run static analysis
         run: go vet ./...
 
