@@ -1,3 +1,14 @@
+wg-frag-go (0.1.0-1) noble; urgency=medium
+
+  * Add a complete WGF configuration reference and example configuration.
+  * Include operational, protocol, threat-model, and configuration documents
+    in Debian packages.
+  * Add the reassembly fuzz target to the bounded fuzz suite and full CI.
+  * Document additional CLI status and peer-configuration operations.
+  * Correct the README benchmark label for the Kernel WireGuard baseline.
+
+ -- kurochan <kuro@kurochan.org>  Mon, 24 Aug 2026 00:00:00 +0000
+
 wg-frag-go (0.0.4-1) noble; urgency=medium
 
   * Verify the Debian package version against the release tag before publishing.
