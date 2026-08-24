@@ -19,8 +19,8 @@ import (
 
 func main() {
 	args := os.Args[1:]
-	// The wgf-quick program name is an alias for the quick subcommand, so a
-	// wg-quick style invocation and systemd unit work unchanged.
+	// The wgf-quick program name is an alias for the quick subcommand, avoiding
+	// a second binary for wg-quick-style invocation.
 	if strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == "wgf-quick" {
 		args = append([]string{"quick"}, args...)
 	}

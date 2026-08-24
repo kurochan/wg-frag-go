@@ -70,8 +70,8 @@ type Interface struct {
 	Workers             AutoCount
 	TUNQueues           AutoCount
 	SocketBuffer        int
-	// FwMark is applied as SO_MARK to the outer UDP sockets; zero disables it.
-	// wgf quick relies on it for policy-routing loop avoidance.
+	// FwMark is an outer UDP socket mark where the platform supports one; zero
+	// disables it. Linux quick uses it for policy-routing loop avoidance.
 	FwMark uint32
 }
 

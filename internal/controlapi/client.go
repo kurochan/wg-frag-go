@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kurochan/wg-frag-go/internal/platform/runtimedir"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,7 +21,7 @@ var (
 	ErrNilContext = errors.New("controlapi: nil context")
 )
 
-// invalidSocketName is longer than Linux's 15-byte interface-name limit, so
+// invalidSocketName is longer than the supported interface-name limit, so
 // malformed input cannot alias a real interface's socket.
 const invalidSocketName = "wgf-invalid-name"
 
@@ -96,7 +97,7 @@ func SocketPath(ifname string) string {
 	if !validInterfaceName(name) {
 		name = invalidSocketName
 	}
-	return filepath.Join("/run/wg-frag", name+".sock")
+	return filepath.Join(runtimedir.Default, name+".sock")
 }
 
 func validInterfaceName(name string) bool {

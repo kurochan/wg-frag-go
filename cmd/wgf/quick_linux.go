@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/internal/platform/runtimedir"
 	"github.com/kurochan/wg-frag-go/internal/quick"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -78,12 +79,12 @@ func resolveQuickTarget(argument string) (ifname, path string, err error) {
 	return argument, quick.ConfigPath(argument), nil
 }
 
-func snapshotPath(ifname string) string { return filepath.Join(quick.RuntimeDir, ifname+".conf") }
-func pidPath(ifname string) string      { return filepath.Join(quick.RuntimeDir, ifname+".pid") }
-func originPath(ifname string) string   { return filepath.Join(quick.RuntimeDir, ifname+".origin") }
-func inputPath(ifname string) string    { return filepath.Join(quick.RuntimeDir, ifname+".quick.conf") }
-func routePath(ifname string) string    { return filepath.Join(quick.RuntimeDir, ifname+".route") }
-func manifestPath(ifname string) string { return filepath.Join(quick.RuntimeDir, ifname+".manifest") }
+func snapshotPath(ifname string) string { return filepath.Join(runtimedir.Default, ifname+".conf") }
+func pidPath(ifname string) string      { return filepath.Join(runtimedir.Default, ifname+".pid") }
+func originPath(ifname string) string   { return filepath.Join(runtimedir.Default, ifname+".origin") }
+func inputPath(ifname string) string    { return filepath.Join(runtimedir.Default, ifname+".quick.conf") }
+func routePath(ifname string) string    { return filepath.Join(runtimedir.Default, ifname+".route") }
+func manifestPath(ifname string) string { return filepath.Join(runtimedir.Default, ifname+".manifest") }
 
 type quickManifest struct {
 	Version       uint8    `json:"version"`
@@ -120,10 +121,10 @@ func acquireQuickFileLock(path string) (func(), error) {
 }
 
 func acquireQuickLock() (func(), error) {
-	if err := os.MkdirAll(quick.RuntimeDir, 0o700); err != nil {
+	if err := os.MkdirAll(runtimedir.Default, 0o700); err != nil {
 		return nil, fmt.Errorf("create quick runtime directory: %w", err)
 	}
-	return acquireQuickFileLock(filepath.Join(quick.RuntimeDir, ".quick.lock"))
+	return acquireQuickFileLock(filepath.Join(runtimedir.Default, ".quick.lock"))
 }
 
 func loadQuickDownParsed(input, fallback, route string) (quick.Parsed, quick.RoutePlan, error) {
@@ -371,7 +372,7 @@ func quickUp(args []string, stdout, stderr io.Writer) error {
 		}
 	}()
 
-	if err := os.MkdirAll(quick.RuntimeDir, 0o700); err != nil {
+	if err := os.MkdirAll(runtimedir.Default, 0o700); err != nil {
 		return err
 	}
 

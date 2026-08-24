@@ -3,9 +3,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,27 +17,13 @@ import (
 	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/controlapi"
 	"github.com/kurochan/wg-frag-go/internal/controlplane"
-	controlstate "github.com/kurochan/wg-frag-go/internal/core/control/state"
-	"github.com/kurochan/wg-frag-go/internal/core/datapath"
 	"github.com/kurochan/wg-frag-go/internal/core/lane"
-	"github.com/kurochan/wg-frag-go/internal/core/limits"
 	"github.com/kurochan/wg-frag-go/internal/core/peerroute"
-	"github.com/kurochan/wg-frag-go/internal/memoryplan"
 	"github.com/kurochan/wg-frag-go/internal/platform/linux/wgbind"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter/controlbridge"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter/shimtun"
 	"golang.zx2c4.com/wireguard/tun"
-)
-
-const (
-	// A DPLPMTUD search retransmits while wireguard-go is busy draining DATA,
-	// so one peer can hold several unsent CONTROL frames at once.
-	controlQueueSize       = 16
-	defaultReorderCapacity = 64
-	// This is an upper bound; shimtun sizes the active ring from the negotiated
-	// fragment count and pre-confirm backlog.
-	carrierQueueSlotLimitMultiplier = limits.MaxFragments * 2
 )
 
 //nolint:funlen // The command owns one resource lifecycle from setup through teardown.
@@ -321,135 +304,4 @@ func warnSocketBuffer(bind *wgbind.Bind, logger *slog.Logger) {
 			"requested_bytes", requested,
 			"remediation", "raise net.core.rmem_max/wmem_max or grant CAP_NET_ADMIN")
 	}
-}
-
-func peerLogger(logger *slog.Logger, peer wgadapter.PeerPlan) *slog.Logger {
-	if logger == nil {
-		return nil
-	}
-	return logger.With("peer_id", peer.ID, "peer_public_key", base64.StdEncoding.EncodeToString(peer.PublicKey[:]))
-}
-
-func dataPlaneBases(
-	cfg *config.Config,
-	plan wgadapter.Plan,
-	classifier *lane.Classifier,
-) ([]shimtun.PeerConfig, error) {
-	if cfg == nil {
-		return nil, errors.New("nil config")
-	}
-	peers := make([]shimtun.PeerConfig, len(plan.Peers))
-	for i, peer := range plan.Peers {
-		base, err := peerDataPlane(cfg, plan, peer, classifier)
-		if err != nil {
-			return nil, err
-		}
-		peers[i] = base
-	}
-	return peers, nil
-}
-
-func peerDataPlane(
-	cfg *config.Config,
-	plan wgadapter.Plan,
-	peer wgadapter.PeerPlan,
-	classifier *lane.Classifier,
-) (shimtun.PeerConfig, error) {
-	perPeerSlots := reassemblySlots(cfg.Interface)
-	if perPeerSlots > cfg.Interface.ReassemblySlots {
-		return shimtun.PeerConfig{}, errors.New("peer reassembly slots exceed interface slots")
-	}
-	return shimtun.PeerConfig{
-		Sender: datapath.SenderConfig{
-			DataSessionID:  1, // replaced by Bridge after ResetSequence.
-			CarrierPayload: cfg.Interface.MinCarrierPayload,
-			MinPack:        limits.DefaultMinPackData,
-			RemotePeerMTU:  cfg.Interface.MTU, // replaced after peer confirmation.
-			PeerID:         peer.ID,
-			AllowedIPs:     plan.Routes,
-			Classifier:     classifier,
-		},
-		Receiver: datapath.ReceiverConfig{
-			PeerID:          peer.ID,
-			DataSessionID:   1, // replaced by Bridge after peer ResetSequence.
-			AllowedIPs:      plan.Routes,
-			Slots:           perPeerSlots,
-			PerPeerSlots:    perPeerSlots,
-			MaxPacketSize:   cfg.Interface.MTU,
-			Lifetime:        cfg.Interface.ReassemblyLifetime,
-			ReorderEnabled:  cfg.Interface.Reorder,
-			ReorderCapacity: min(cfg.Interface.ReassemblySlots, defaultReorderCapacity),
-			ReorderBudget:   reorderBudget(perPeerSlots, cfg.Interface.Reorder),
-			ReorderMaxDelay: cfg.Interface.ReorderMaxDelay,
-		},
-	}, nil
-}
-
-func reorderBudget(slots int, enabled bool) int {
-	if !enabled {
-		return 0
-	}
-	return slots - 1
-}
-
-func reassemblySlots(iface config.Interface) int {
-	if iface.PeerReassemblySlots.Auto {
-		return iface.ReassemblySlots
-	}
-	return iface.PeerReassemblySlots.Count
-}
-
-func logMemoryReservation(logger *slog.Logger, cfg *config.Config, peers, batch int) {
-	if logger == nil || cfg == nil {
-		return
-	}
-	reorderLanes := 1
-	if cfg.Interface.Workers.Count > reorderLanes {
-		reorderLanes = cfg.Interface.Workers.Count
-	}
-	estimate, err := memoryplan.Calculate(memoryplan.Config{
-		MTU:               cfg.Interface.MTU,
-		Peers:             peers,
-		ReassemblySlots:   reassemblySlots(cfg.Interface),
-		MaxCarrierPayload: cfg.Interface.MaxCarrierPayload,
-		CarrierQueueSlots: batch * carrierQueueSlotLimitMultiplier,
-		ControlQueueSlots: controlQueueSize,
-		ReorderCapacity:   min(cfg.Interface.ReassemblySlots, defaultReorderCapacity),
-		ReorderLanes:      reorderLanes,
-		TUNBatchSize:      batch,
-	})
-	if err != nil {
-		logger.Warn("fixed buffer reservation could not be estimated", "error", err)
-		return
-	}
-	logger.Info("fixed buffer reservation", "bytes", estimate.TotalBytes, "reassembly_bytes", estimate.ReassemblyBytes, "carrier_bytes", estimate.CarrierBytes, "control_bytes", estimate.ControlBytes)
-}
-
-func newEngine(cfg *config.Config) (*controlplane.Engine, error) {
-	return controlplane.New(controlplane.Config{
-		CanonicalizeCarrierPayload: wgadapter.CanonicalCarrierPayload,
-		TransportDatagramSize:      wgadapter.WireGuardDatagramSize,
-		State: controlstate.Config{
-			MaxCarrierPayload:    uint32(cfg.Interface.MaxCarrierPayload),
-			MinCarrierPayload:    uint32(cfg.Interface.MinCarrierPayload),
-			ReassemblyLifetimeMs: uint32(cfg.Interface.ReassemblyLifetime.Milliseconds()),
-			LocalPeerMTU:         uint32(cfg.Interface.MTU),
-			StateSyncMinInterval: time.Second,
-			Clock:                controlstate.ClockFunc(time.Now),
-			Entropy: controlstate.EntropyFunc(func() (uint64, error) {
-				var bytes [8]byte
-				if _, err := rand.Read(bytes[:]); err != nil {
-					return 0, err
-				}
-				return binary.BigEndian.Uint64(bytes[:]), nil
-			}),
-		},
-	})
-}
-
-func minDuration(left, right time.Duration) time.Duration {
-	if left < right {
-		return left
-	}
-	return right
 }
