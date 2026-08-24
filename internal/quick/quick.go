@@ -18,10 +18,6 @@ import (
 // ConfigDir is the canonical location for persistent quick configurations.
 const ConfigDir = "/etc/wg-frag"
 
-// RuntimeDir holds ephemeral daemon startup snapshots; it is never the
-// authority for persistent configuration.
-const RuntimeDir = "/run/wg-frag"
-
 var ErrInvalidName = errors.New("quick: interface name must be 1..15 characters of [a-zA-Z0-9_=+.-]")
 
 // TableMode selects how quick installs routes for peer AllowedIPs.
@@ -68,8 +64,8 @@ func quickOnlyKey(key string) bool {
 	}
 }
 
-// ValidateName enforces Linux interface-name limits before the name is used
-// in paths and shell hook substitution.
+// ValidateName enforces the portable interface-name bound before the name is
+// used in paths and shell hook substitution.
 func ValidateName(name string) error {
 	if name == "" || len(name) > 15 {
 		return ErrInvalidName

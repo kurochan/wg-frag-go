@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kurochan/wg-frag-go/internal/platform/runtimedir"
 	"golang.org/x/sys/unix"
 
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
@@ -268,11 +269,11 @@ func TestSocketPathDoesNotAliasPathLikeInterfaceNames(t *testing.T) {
 	t.Parallel()
 	for _, input := range []string{"../wgf0", "wgf0/other", "/tmp/wgf0", "..", ""} {
 		path := SocketPath(input)
-		if filepath.Dir(path) != "/run/wg-frag" || filepath.Base(path) == "wgf0.sock" || path == SocketPath("_") {
+		if filepath.Dir(path) != runtimedir.Default || filepath.Base(path) == "wgf0.sock" || path == SocketPath("_") {
 			t.Fatalf("SocketPath(%q) escaped or aliased: %q", input, path)
 		}
 	}
-	if got := SocketPath("wgf0"); got != "/run/wg-frag/wgf0.sock" {
+	if got := SocketPath("wgf0"); got != filepath.Join(runtimedir.Default, "wgf0.sock") {
 		t.Fatalf("SocketPath(valid) = %q", got)
 	}
 }
