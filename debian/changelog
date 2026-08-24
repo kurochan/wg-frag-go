@@ -1,3 +1,13 @@
+wg-frag-go (0.1.1-1) noble; urgency=medium
+
+  * Separate platform-neutral runtime and data-plane setup from Linux UDP and
+    routing integration as groundwork for macOS support.
+  * Add macOS CI coverage for the portable test suite and Darwin amd64/arm64
+    builds.
+  * Select the default daemon runtime directory per platform.
+
+ -- kurochan <kuro@kurochan.org>  Mon, 24 Aug 2026 00:00:00 +0000
+
 wg-frag-go (0.1.0-1) noble; urgency=medium
 
   * Add a complete WGF configuration reference and example configuration.
