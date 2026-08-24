@@ -40,9 +40,9 @@ WGF carriers.
 - Runtime DPLPMTUD based on RFC 8899. DATA starts at the 613-byte base carrier
   payload and grows after successful probes; a failed confirmation returns to
   the base and retries with backoff.
-- Linux outer-UDP sockets that reject IP fragmentation and report local
-  `EMSGSIZE` failures to the PMTU engine. `recvmmsg`/`sendmmsg` and UDP GSO/GRO
-  are used when available, with automatic fallback.
+- Outer-UDP sockets that reject IP fragmentation and report local `EMSGSIZE`
+  failures to the PMTU engine. Linux uses `recvmmsg`/`sendmmsg` and UDP GSO/GRO
+  when available; macOS uses its native `utun` device and sequential UDP I/O.
 - WireGuard-style multi-peer configuration and `AllowedIPs` longest-prefix
   selection plus ingress source validation.
 - `wgf` and `wgf-quick` command-line workflows, a per-interface Unix control
@@ -84,10 +84,11 @@ additional WGF processing latency.
 
 ## Requirements
 
-The runtime targets Linux on amd64 and arm64. Building the binary
-requires Go 1.26.0 or newer. Running an interface normally requires root or
-the capabilities needed to create a TUN device, configure routes and rules,
-set the UDP socket mark, and request socket buffers.
+The runtime supports Linux on amd64 and arm64, and macOS on arm64 and amd64.
+Building the binary requires Go 1.26.0 or newer. Linux supports both `wgf run`
+and `wgf quick`; macOS currently supports `wgf run` only. macOS allocates a
+native `utunN` device and leaves addresses and routes under operator control.
+Running an interface normally requires root or equivalent network privileges.
 
 ## Build and install
 
@@ -174,7 +175,7 @@ wgf check --config /etc/wg-frag/wgf0.conf
 # Foreground daemon
 sudo wgf run wgf0 --config /etc/wg-frag/wgf0.conf
 
-# wg-quick-style lifecycle (wgf-quick is an executable-name alias)
+# Linux-only wg-quick-style lifecycle (wgf-quick is an executable-name alias)
 sudo wgf quick up wgf0
 sudo wgf quick down wgf0
 sudo wgf quick save wgf0

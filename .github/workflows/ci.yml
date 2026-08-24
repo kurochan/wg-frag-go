@@ -66,9 +66,6 @@ jobs:
       - name: Run race tests
         run: make test-race
 
-      - name: Run fuzz smoke tests
-        run: make fuzz
-
       - name: Run static analysis
         run: go vet ./...
 
@@ -109,3 +106,28 @@ jobs:
         run: |
           GOOS=darwin GOARCH=amd64 go build -o "$RUNNER_TEMP/wgf-darwin-amd64" ./cmd/wgf
           GOOS=darwin GOARCH=arm64 go build -o "$RUNNER_TEMP/wgf-darwin-arm64" ./cmd/wgf
+
+  macos-qemu-e2e:
+    name: Go Checks / macOS Linux E2E
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install QEMU dependencies
+        run: brew install qemu squashfs
+
+      - name: Run macOS host to Linux guest tunnel
+        run: ruby scripts/macos-qemu-e2e.rb

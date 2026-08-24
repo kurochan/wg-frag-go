@@ -1,7 +1,12 @@
 # Installation and operations
 
-Supported runtime targets are Linux amd64 and arm64. The correctness baseline
-is Linux 5.10 or newer; Linux 6.2 or newer is recommended for performance.
+Supported runtime targets are Linux amd64/arm64 and macOS amd64/arm64. The
+correctness baseline is Linux 5.10 or newer; Linux 6.2 or newer is recommended
+for performance. macOS currently supports foreground `wgf run` only: it
+allocates a native `utunN` device, while the operator configures addresses and
+routes. Its root-owned control sockets are stored below `/var/db/wg-frag`.
+`wgf quick`, systemd integration, Debian packages, and the PPA are
+Linux-only.
 The PPA targets Ubuntu series while they are in Canonical's standard support
 window. The currently published series are Ubuntu 22.04 (jammy), 24.04
 (noble), and 26.04 (resolute) LTS. EOL series are not backfilled.

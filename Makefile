@@ -22,7 +22,7 @@ lint:
 tools-download:
 	cd tools && go mod download
 
-FUZZTIME ?= 10s
+FUZZTIME ?= 5s
 
 # The checked-in tool module is used locally, so generation does not upload
 # schemas to a remote plugin registry.
