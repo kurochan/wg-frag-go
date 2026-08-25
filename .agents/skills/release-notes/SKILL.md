@@ -54,11 +54,16 @@ Write release content in English unless the user requests another language.
 
 ## Debian header metadata
 
-The generator defaults to `urgency=medium`. Assess whether the release has a
-specific operational reason for a different urgency, such as a security fix or
-a severe data-loss or availability defect. If so, tell the user the proposed
-level and reason. Edit the generated Debian header only after the user
-explicitly approves that metadata change; otherwise leave the default intact.
+Each release entry carries its Debian urgency as a hidden metadata line:
+
+```md
+<!-- debian: urgency=medium -->
+```
+
+Assess whether the release has a specific operational reason for a different
+urgency, such as a security fix or a severe data-loss or availability defect.
+If so, tell the user the proposed level and reason. Change the metadata only
+after the user explicitly approves it; otherwise use `medium`.
 
 Return:
 
@@ -71,12 +76,12 @@ Return:
 Only after an explicit request to apply the draft:
 
 1. add the new version section at the top of `RELEASE_NOTES.md`, using the
-   repository's `## VERSION - TIMESTAMP` heading syntax and a UTC timestamp
+   repository's `## VERSION - TIMESTAMP` heading syntax, a UTC timestamp
    obtained at edit time (for example, with `date -u`) in RFC 3339 format
-   (`YYYY-MM-DDTHH:MM:SSZ`). Do not infer the timestamp. Existing day-only
-   headings are legacy entries and remain supported.
-2. run `make release-notes-generate`; if approved, adjust Debian header
-   metadata such as `urgency`, then run `make release-notes-check`;
+   (`YYYY-MM-DDTHH:MM:SSZ`), and `<!-- debian: urgency=medium -->`. Do not
+   infer the timestamp. Existing day-only headings are legacy entries and
+   remain supported.
+2. run `make release-notes-generate`, then `make release-notes-check`;
 3. show the diff and verify that the rendered GitHub highlights match the
    intended release summary.
 

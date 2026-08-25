@@ -7,7 +7,7 @@ require "time"
 module ReleaseNotes
   class Error < StandardError; end
 
-  Entry = Struct.new(:version, :date, :bullets, keyword_init: true) do
+  Entry = Struct.new(:version, :date, :urgency, :bullets, keyword_init: true) do
     def debian_version
       "#{version.sub("-rc.", "~rc.")}-1"
     end
@@ -19,7 +19,9 @@ module ReleaseNotes
 
   VERSION = /\A(?:v)?(\d+\.\d+\.\d+(?:-rc\.\d+)?)\z/.freeze
   HEADING = /^##\s+v?(\d+\.\d+\.\d+(?:-rc\.\d+)?)\s+-\s+(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?)\s*$/.freeze
-  DEBIAN_HEADER = /^wg-frag-go \(([^)]+)\) .+; urgency=.+$/.freeze
+  URGENCY = /(?:low|medium|high|critical|emergency)/.freeze
+  METADATA = /^<!-- debian: urgency=(#{URGENCY}) -->$/.freeze
+  DEBIAN_HEADER = /^wg-frag-go \(([^)]+)\) .+; urgency=(#{URGENCY})$/.freeze
 
   module_function
 
@@ -38,6 +40,11 @@ module ReleaseNotes
       if (match = HEADING.match(line))
         entries << current if current
         current = Entry.new(version: match[1], date: parse_timestamp(match[2], line_number), bullets: [])
+      elsif (match = METADATA.match(line))
+        raise Error, "#{path}:#{line_number}: Debian metadata is outside a release" unless current
+        raise Error, "#{path}:#{line_number}: duplicate Debian metadata" if current.urgency
+
+        current.urgency = match[1]
       elsif line.start_with?("##")
         raise Error, "#{path}:#{line_number}: invalid release heading"
       elsif line.start_with?("- ")
@@ -58,6 +65,7 @@ module ReleaseNotes
     ensure_unique_entries(path, entries)
     entries.each do |entry|
       raise Error, "#{path}: #{entry.version} has no bullets" if entry.bullets.empty?
+      raise Error, "#{path}: #{entry.version} has no Debian urgency" unless entry.urgency
     end
     entries
   end
@@ -75,7 +83,7 @@ module ReleaseNotes
     File.foreach(path, encoding: Encoding::UTF_8, chomp: true).with_index(1) do |line, line_number|
       if (match = DEBIAN_HEADER.match(line))
         entries << current if current
-        current = Entry.new(version: normalize_debian_version(match[1]), date: nil, bullets: [])
+        current = Entry.new(version: normalize_debian_version(match[1]), date: nil, urgency: match[2], bullets: [])
         current_bullet = nil
       elsif line.start_with?("  * ")
         raise Error, "#{path}:#{line_number}: bullet is outside an entry" unless current
@@ -104,6 +112,7 @@ module ReleaseNotes
     end
 
     notes_entries.zip(debian_entries).each do |notes_entry, debian_entry|
+      raise Error, "urgency mismatch for #{notes_entry.version}" unless notes_entry.urgency == debian_entry.urgency
       next if notes_entry.bullets == debian_entry.bullets
 
       raise Error, "bullet mismatch for #{notes_entry.version}"
