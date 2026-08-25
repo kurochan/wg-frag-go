@@ -1,3 +1,17 @@
+wg-frag-go (0.2.0-1) noble; urgency=medium
+
+  * Add native macOS support, including Darwin UDP transport and runtime
+    integration.
+  * Add an end-to-end tunnel test between a macOS host and an isolated QEMU
+    Linux guest.
+  * Add a helper to update and verify the pinned Alpine netboot artifacts used
+    by the macOS E2E test.
+  * Run fuzz smoke tests and lint checks in dedicated CI workflows.
+  * Make curated release notes the source for Debian changelogs and GitHub
+    Release highlights.
+
+ -- kurochan <kuro@kurochan.org>  Tue, 25 Aug 2026 01:49:35 +0000
+
 wg-frag-go (0.1.1-1) noble; urgency=medium
 
   * Separate platform-neutral runtime and data-plane setup from Linux UDP and
@@ -11,8 +25,8 @@ wg-frag-go (0.1.1-1) noble; urgency=medium
 wg-frag-go (0.1.0-1) noble; urgency=medium
 
   * Add a complete WGF configuration reference and example configuration.
-  * Include operational, protocol, threat-model, and configuration documents
-    in Debian packages.
+  * Include operational, protocol, threat-model, and configuration documents in
+    Debian packages.
   * Add the reassembly fuzz target to the bounded fuzz suite and full CI.
   * Document additional CLI status and peer-configuration operations.
   * Correct the README benchmark label for the Kernel WireGuard baseline.
@@ -21,7 +35,8 @@ wg-frag-go (0.1.0-1) noble; urgency=medium
 
 wg-frag-go (0.0.4-1) noble; urgency=medium
 
-  * Verify the Debian package version against the release tag before publishing.
+  * Verify the Debian package version against the release tag before
+    publishing.
 
  -- kurochan <kuro@kurochan.org>  Sat, 22 Aug 2026 06:20:26 +0000
 

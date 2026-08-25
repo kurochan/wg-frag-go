@@ -1,0 +1,10 @@
+<% entries.each_with_index do |entry, index| -%>
+wg-frag-go (<%= entry.debian_version %>) noble; urgency=medium
+
+<% entry.bullets.each do |bullet| -%>
+<%= format_bullet(bullet) %>
+<% end -%>
+<%= "\n" -%>
+ -- kurochan <kuro@kurochan.org>  <%= entry.debian_date %>
+<%= "\n" unless index == entries.length - 1 -%>
+<% end -%>

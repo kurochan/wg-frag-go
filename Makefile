@@ -1,4 +1,6 @@
-.PHONY: build clean lint tools-download proto proto-check test test-race fuzz test-netns bench-netns \
+.PHONY: build clean lint tools-download proto proto-check test test-race fuzz release-notes-generate \
+	release-notes-check \
+	test-netns bench-netns \
 	test-netns-control-recovery test-netns-base-recovery \
 	test-netns-base-failure-recovery test-netns-no-fragment test-netns-no-fragmentation
 
@@ -32,6 +34,12 @@ proto:
 proto-check:
 	go tool -modfile=tools/go.mod buf generate
 	git diff --exit-code -- proto
+
+release-notes-generate:
+	ruby scripts/generate_debian_changelog.rb
+
+release-notes-check:
+	ruby scripts/check_release_notes_sync.rb
 
 test:
 	go test ./...

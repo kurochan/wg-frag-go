@@ -15,7 +15,7 @@ GUEST_ADDRESS = "10.254.91.2"
 HOST_ADDRESS = "10.254.91.1"
 TRANSFER_BYTES = 1024 * 1024
 # Update this URL and all three checksums together with
-# update-macos-qemu-e2e-artifacts.rb, then run this E2E test on macOS.
+# update_macos_qemu_e2e_artifacts.rb, then run this E2E test on macOS.
 ALPINE_NETBOOT = "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/aarch64/netboot"
 ALPINE_ARTIFACTS = {
   "vmlinuz-virt" => "1a2fa67cb25a2fa9065818712d50d0d543526818b3c6b43695e54deaca33d66d",
