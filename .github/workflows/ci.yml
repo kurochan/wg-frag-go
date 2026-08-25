@@ -127,4 +127,4 @@ jobs:
         run: brew install qemu squashfs
 
       - name: Run macOS host to Linux guest tunnel
-        run: ruby scripts/macos-qemu-e2e.rb
+        run: ruby scripts/macos_qemu_e2e.rb

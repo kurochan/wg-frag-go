@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Updates the Alpine netboot URL and checksums used by macos-qemu-e2e.rb.
+# Updates the Alpine netboot URL and checksums used by macos_qemu_e2e.rb.
 # Without --branch, uses the latest Alpine stable release branch.
 
 require "digest"
@@ -10,14 +10,14 @@ require "optparse"
 require "tmpdir"
 
 ARTIFACTS = %w[vmlinuz-virt initramfs-virt modloop-virt].freeze
-SOURCE = File.expand_path("macos-qemu-e2e.rb", __dir__)
+SOURCE = File.expand_path("macos_qemu_e2e.rb", __dir__)
 LATEST_STABLE_METADATA = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/aarch64/latest-releases.yaml"
 
 options = { write: false }
 OptionParser.new do |parser|
   parser.banner = "Usage: #{File.basename($PROGRAM_NAME)} [--branch vX.Y] [--write]"
   parser.on("--branch BRANCH", "Alpine release branch, for example v3.24") { |value| options[:branch] = value }
-  parser.on("--write", "Update macos-qemu-e2e.rb; otherwise print the proposed constants") { options[:write] = true }
+  parser.on("--write", "Update macos_qemu_e2e.rb; otherwise print the proposed constants") { options[:write] = true }
 end.parse!
 
 def run!(*command)

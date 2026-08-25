@@ -49,6 +49,13 @@ jobs:
             exit 1
           fi
 
+      - name: Verify release notes synchronization
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          make release-notes-check
+          ruby scripts/render_github_release_notes.rb --version "$RELEASE_TAG" >/dev/null
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -91,12 +98,24 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Render GitHub release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          ruby scripts/render_github_release_notes.rb --version "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+          printf '\n' >> "$RUNNER_TEMP/release-notes.md"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" \
+            -f target_commitish="$GITHUB_SHA" \
+            --jq .body >> "$RUNNER_TEMP/release-notes.md"
+
       - name: Release with GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
