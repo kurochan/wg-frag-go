@@ -3,12 +3,6 @@ version: 2
 project_name: wg-frag-go
 dist: .release
 
-before:
-  hooks:
-    - go mod download
-    - go tool -modfile=tools/go.mod buf generate
-    - git diff --exit-code -- proto
-
 builds:
   - id: wgf
     main: ./cmd/wgf
