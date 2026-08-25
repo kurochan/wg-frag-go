@@ -18,7 +18,7 @@ module ReleaseNotes
   end
 
   VERSION = /\A(?:v)?(\d+\.\d+\.\d+(?:-rc\.\d+)?)\z/.freeze
-  HEADING = /^##\s+v?(\d+\.\d+\.\d+(?:-rc\.\d+)?)\s+—\s+(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?)\s*$/.freeze
+  HEADING = /^##\s+v?(\d+\.\d+\.\d+(?:-rc\.\d+)?)\s+-\s+(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?)\s*$/.freeze
   DEBIAN_HEADER = /^wg-frag-go \(([^)]+)\) .+; urgency=.+$/.freeze
 
   module_function
@@ -34,7 +34,7 @@ module ReleaseNotes
     entries = []
     current = nil
 
-    File.foreach(path, chomp: true).with_index(1) do |line, line_number|
+    File.foreach(path, encoding: Encoding::UTF_8, chomp: true).with_index(1) do |line, line_number|
       if (match = HEADING.match(line))
         entries << current if current
         current = Entry.new(version: match[1], date: parse_timestamp(match[2], line_number), bullets: [])
@@ -63,7 +63,7 @@ module ReleaseNotes
   end
 
   def render_debian(entries, template_path)
-    template = ERB.new(File.read(template_path), trim_mode: "-")
+    template = ERB.new(File.read(template_path, encoding: Encoding::UTF_8), trim_mode: "-")
     template.result(RenderContext.new(entries).get_binding)
   end
 
@@ -72,7 +72,7 @@ module ReleaseNotes
     current = nil
     current_bullet = nil
 
-    File.foreach(path, chomp: true).with_index(1) do |line, line_number|
+    File.foreach(path, encoding: Encoding::UTF_8, chomp: true).with_index(1) do |line, line_number|
       if (match = DEBIAN_HEADER.match(line))
         entries << current if current
         current = Entry.new(version: normalize_debian_version(match[1]), date: nil, bullets: [])

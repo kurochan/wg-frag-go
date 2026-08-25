@@ -71,10 +71,10 @@ Return:
 Only after an explicit request to apply the draft:
 
 1. add the new version section at the top of `RELEASE_NOTES.md`, using the
-   repository's heading syntax and a UTC timestamp obtained at edit time (for
-   example, with `date -u`) in RFC 3339 format (`YYYY-MM-DDTHH:MM:SSZ`). Do
-   not infer the timestamp. Existing day-only headings are legacy entries and
-   remain supported.
+   repository's `## VERSION - TIMESTAMP` heading syntax and a UTC timestamp
+   obtained at edit time (for example, with `date -u`) in RFC 3339 format
+   (`YYYY-MM-DDTHH:MM:SSZ`). Do not infer the timestamp. Existing day-only
+   headings are legacy entries and remain supported.
 2. run `make release-notes-generate`; if approved, adjust Debian header
    metadata such as `urgency`, then run `make release-notes-check`;
 3. show the diff and verify that the rendered GitHub highlights match the

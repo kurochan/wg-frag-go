@@ -1,6 +1,6 @@
 # Release Notes
 
-## 0.2.0 — 2026-08-25T01:49:35Z
+## 0.2.0 - 2026-08-25T01:49:35Z
 
 - Add native macOS support, including Darwin UDP transport and runtime integration.
 - Add an end-to-end tunnel test between a macOS host and an isolated QEMU Linux guest.
@@ -8,13 +8,13 @@
 - Run fuzz smoke tests and lint checks in dedicated CI workflows.
 - Make curated release notes the source for Debian changelogs and GitHub Release highlights.
 
-## 0.1.1 — 2026-08-24
+## 0.1.1 - 2026-08-24
 
 - Separate platform-neutral runtime and data-plane setup from Linux UDP and routing integration as groundwork for macOS support.
 - Add macOS CI coverage for the portable test suite and Darwin amd64/arm64 builds.
 - Select the default daemon runtime directory per platform.
 
-## 0.1.0 — 2026-08-24
+## 0.1.0 - 2026-08-24
 
 - Add a complete WGF configuration reference and example configuration.
 - Include operational, protocol, threat-model, and configuration documents in Debian packages.
@@ -22,32 +22,32 @@
 - Document additional CLI status and peer-configuration operations.
 - Correct the README benchmark label for the Kernel WireGuard baseline.
 
-## 0.0.4 — 2026-08-22T06:20:26Z
+## 0.0.4 - 2026-08-22T06:20:26Z
 
 - Verify the Debian package version against the release tag before publishing.
 
-## 0.0.3-rc.5 — 2026-08-14
+## 0.0.3-rc.5 - 2026-08-14
 
 - Add build target.
 
-## 0.0.3-rc.4 — 2026-08-14
+## 0.0.3-rc.4 - 2026-08-14
 
 - Fix Launchpad PPA builds when sbuild provides a non-writable HOME by using a build-local Go cache.
 
-## 0.0.3-rc.3 — 2026-08-14
+## 0.0.3-rc.3 - 2026-08-14
 
 - Publish Launchpad PPA source packages for each supported Ubuntu series in parallel.
 - Support Ubuntu 22.04 (jammy), 24.04 (noble), and 26.04 (resolute) PPA builds with series-specific package version suffixes.
 - Document the Ubuntu support policy and PPA rebuild versioning.
 
-## 0.0.3-rc.2 — 2026-08-14
+## 0.0.3-rc.2 - 2026-08-14
 
 - Fix Launchpad source package generation.
 
-## 0.0.3-rc.1 — 2026-08-14
+## 0.0.3-rc.1 - 2026-08-14
 
 - Prepare the 0.0.3 release candidate.
 
-## 0.0.2-rc.1 — 2026-08-13
+## 0.0.2-rc.1 - 2026-08-13
 
 - Package wg-frag-go for the Launchpad PPA.
