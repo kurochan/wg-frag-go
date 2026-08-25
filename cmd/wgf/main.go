@@ -121,6 +121,6 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  addconf IFNAME FILE  add the file's peers to the running set")
 	fmt.Fprintln(writer, "  syncconf IFNAME FILE  same as setconf; existing sessions are preserved")
 	fmt.Fprintln(writer, "  check --config PATH  validate a WGF configuration")
-	fmt.Fprintln(writer, "  run IFNAME --config PATH  run one Linux interface in the foreground")
+	fmt.Fprintln(writer, "  run IFNAME --config PATH  run one interface in the foreground")
 	fmt.Fprintln(writer, "  quick up|down|save|strip ARG  wg-quick style lifecycle (also as wgf-quick)")
 }

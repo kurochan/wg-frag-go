@@ -1,6 +1,6 @@
 # Configuration reference
 
-WGF reads WireGuard-style INI files. `wgf quick up <interface>` reads
+WGF reads WireGuard-style INI files. On Linux, `wgf quick up <interface>` reads
 `/etc/wg-frag/<interface>.conf`; `wgf run` accepts an explicit path. Validate a
 file before starting it:
 
@@ -19,9 +19,9 @@ Keep private-key files mode 0600.
 | `PrivateKey` | required | Base64 WireGuard private key. |
 | `ListenPort` | `0` | UDP port; zero lets the operating system select one. |
 | `MTU` | `1500` | Inner TUN MTU. Allowed range: 1280 through 9612 bytes. |
-| `FwMark` | `0` | Outer UDP socket mark. `wgf quick` uses it for full-tunnel loop avoidance. |
+| `FwMark` | `0` | Linux outer UDP socket mark. `wgf quick` uses it for full-tunnel loop avoidance. Ignored by macOS `wgf run`. |
 
-`wgf quick` additionally handles `Table`, `PreUp`, `PostUp`, `PreDown`,
+On Linux, `wgf quick` additionally handles `Table`, `PreUp`, `PostUp`, `PreDown`,
 `PostDown`, and `SaveConfig` using wg-quick-compatible behavior. `DNS` is
 ignored with a warning.
 

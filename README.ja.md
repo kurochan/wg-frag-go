@@ -39,9 +39,9 @@ WireGuard セッション自体を確立できますが、WGF carrier は解釈�
 - RFC 8899 を基にした実行時 DPLPMTUD。DATA は613-byteのbase carrier payloadから
   開始し、probe成功後に拡大します。確認に失敗した場合はbaseへ戻り、backoffして
   再探索します。
-- Linux の外側 UDP socket で IP fragmentation を禁止し、local `EMSGSIZE` を
-  PMTU engineへ通知します。利用可能な環境では `recvmmsg`/`sendmmsg` と UDP
-  GSO/GRO を使い、未対応の場合は自動的にフォールバックします。
+- 外側 UDP socket で IP fragmentation を禁止し、local `EMSGSIZE` を PMTU engineへ
+  通知します。Linuxでは利用可能な場合に `recvmmsg`/`sendmmsg` と UDP GSO/GRO を使い、
+  macOSではnative `utun` deviceと逐次UDP I/Oを使用します。
 - WireGuard 互換の複数peer設定、`AllowedIPs` の最長プレフィックス一致によるpeer選択、
   ingress source validation。
 - `wgf` / `wgf-quick` CLI、interfaceごとの Unix control socket、gRPC control API、
@@ -80,9 +80,11 @@ packing、reassembly、reorderに使うバッファをdeviceとpeerの状態作�
 
 ## 動作要件
 
-実行環境は Linux の amd64 と arm64 を対象とします。バイナリのビルドには Go 1.26.0
-以降が必要です。interfaceの起動には通常、rootまたは TUN 作成、route/rule設定、
-UDP socket mark設定、socket buffer要求に必要な権限が必要です。
+実行環境は Linux の amd64 / arm64 と macOS の arm64 / amd64 を対象とします。
+バイナリのビルドには Go 1.26.0 以降が必要です。Linuxは `wgf run` と `wgf quick` を
+対応し、macOSは現時点で `wgf run` のみ対応します。macOSではnative `utunN` deviceを
+割り当て、addressとrouteはoperatorが設定します。interfaceの起動には通常、rootまたは
+同等のnetwork権限が必要です。
 
 ## ビルドとインストール
 
@@ -165,7 +167,7 @@ wgf check --config /etc/wg-frag/wgf0.conf
 # フォアグラウンドデーモン
 sudo wgf run wgf0 --config /etc/wg-frag/wgf0.conf
 
-# wg-quick 互換のライフサイクル（wgf-quick は実行ファイル名によるalias）
+# Linux限定のwg-quick互換ライフサイクル（wgf-quick は実行ファイル名によるalias）
 sudo wgf quick up wgf0
 sudo wgf quick down wgf0
 sudo wgf quick save wgf0

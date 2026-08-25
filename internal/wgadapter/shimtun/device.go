@@ -166,6 +166,10 @@ type Config struct {
 	// carriers. Zero uses the largest initial Sender payload.
 	MaxCarrierPayload    int
 	DataInitiallyEnabled bool
+	// NativeReadOffset reserves a platform TUN read header before an inner
+	// packet. macOS utun requires 4 bytes for its address-family header; Linux
+	// native TUN reads are headerless.
+	NativeReadOffset int
 	// NativeWriteOffset reserves a platform TUN write header before an inner
 	// packet. Linux NativeTun with IFF_VNET_HDR requires 10; zero is used by
 	// headerless test and future platform devices.
@@ -277,6 +281,7 @@ type Device struct {
 	readStorage          []byte
 	readBufs             [][]byte
 	readSizes            []int
+	nativeReadOffset     int
 	queueReady           chan struct{}
 	queueDrained         chan struct{}
 	readInterrupt        chan struct{}
@@ -332,7 +337,7 @@ type Device struct {
 //nolint:cyclop // Construction validates and sizes all fixed buffers before publication.
 func New(config Config) (*Device, error) {
 	if config.Native == nil || len(config.Peers) == 0 || config.CarrierQueueSize <= 0 || config.ControlQueueSize <= 0 ||
-		config.NativeWriteOffset < 0 || config.ExpirationInterval <= 0 {
+		config.NativeReadOffset < 0 || config.NativeWriteOffset < 0 || config.ExpirationInterval <= 0 {
 		return nil, ErrInvalidConfig
 	}
 	batch := config.Native.BatchSize()
@@ -340,11 +345,13 @@ func New(config Config) (*Device, error) {
 		return nil, ErrInvalidConfig
 	}
 	nativeMTU, err := config.Native.MTU()
-	if err != nil || limits.ValidateInnerMTU(nativeMTU) != nil || config.NativeWriteOffset > nativeMTU {
+	if err != nil || limits.ValidateInnerMTU(nativeMTU) != nil || config.NativeReadOffset > nativeMTU ||
+		config.NativeWriteOffset > nativeMTU {
 		return nil, ErrInvalidConfig
 	}
 	maxInt := int(^uint(0) >> 1)
-	if batch > maxInt/nativeMTU || config.NativeWriteOffset+nativeMTU > maxInt/batch {
+	if batch > maxInt/nativeMTU || config.NativeReadOffset+nativeMTU > maxInt/batch ||
+		config.NativeWriteOffset+nativeMTU > maxInt/batch {
 		return nil, ErrInvalidConfig
 	}
 	maxCarrierPayload := config.MaxCarrierPayload
@@ -403,6 +410,7 @@ func New(config Config) (*Device, error) {
 	d := &Device{
 		native:            config.Native,
 		batch:             batch,
+		nativeReadOffset:  config.NativeReadOffset,
 		nativeWriteOffset: config.NativeWriteOffset,
 		carrierSize:       largestCarrier,
 		dataStride:        largestCarrier,
@@ -417,7 +425,7 @@ func New(config Config) (*Device, error) {
 		queueLens:         make([]int, queueSlots),
 		queuePeers:        make([]peerroute.PeerID, queueSlots),
 		controlLens:       make([]int, controlDescriptorCapacity),
-		readStorage:       make([]byte, batch*nativeMTU),
+		readStorage:       make([]byte, batch*(config.NativeReadOffset+nativeMTU)),
 		readBufs:          make([][]byte, batch),
 		readSizes:         make([]int, batch),
 		queueReady:        make(chan struct{}, 1),
@@ -445,8 +453,9 @@ func New(config Config) (*Device, error) {
 
 	d.ptbTokens = ptbTokenBucketSize
 	for i := range d.readBufs {
-		start := i * nativeMTU
-		d.readBufs[i] = d.readStorage[start : start+nativeMTU]
+		stride := d.nativeReadOffset + nativeMTU
+		start := i * stride
+		d.readBufs[i] = d.readStorage[start : start+stride]
 	}
 
 	table := &peerTable{
@@ -1286,7 +1295,7 @@ func (d *Device) readNative() {
 		if !d.waitForCarrierSpace() {
 			return
 		}
-		n, readErr := d.native.Read(d.readBufs, d.readSizes, 0)
+		n, readErr := d.native.Read(d.readBufs, d.readSizes, d.nativeReadOffset)
 		if d.closed.Load() {
 			return
 		}
@@ -1383,14 +1392,14 @@ func (d *Device) processNativeBatch(n int) bool {
 
 	for i := 0; i < n; i++ {
 		size := d.readSizes[i]
-		if size < 0 || size > len(d.readBufs[i]) {
+		if size < 0 || size > len(d.readBufs[i])-d.nativeReadOffset {
 			d.rollbackDataLocked(startCount)
 			d.txFatal = ErrShortBuffer
 			d.txMu.Unlock()
 			d.notifyQueue()
 			return false
 		}
-		packet := d.readBufs[i][:size]
+		packet := d.readBufs[i][d.nativeReadOffset : d.nativeReadOffset+size]
 		peer, err := routePacket(table, packet)
 		if err != nil {
 			d.dropTXPacket(err, packet, 0)

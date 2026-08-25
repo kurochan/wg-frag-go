@@ -174,6 +174,34 @@ func TestRoundTripPacksNativeBatch(t *testing.T) {
 	}
 }
 
+func TestRoundTripHonorsNativeReadOffset(t *testing.T) {
+	t.Parallel()
+	packet := ipv4Packet(10, 0, 80)
+	aNative := newFakeTUN("a", 1500, [][]byte{packet})
+	bNative := newFakeTUN("b", 1500)
+	config := pairConfig(t, aNative, true, 64)
+	config.NativeReadOffset = 4
+	a, err := New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := newPairDevice(t, bNative, false, 64)
+	t.Cleanup(func() { _ = a.Close() })
+	t.Cleanup(func() { _ = b.Close() })
+
+	carriers, sizes, n, err := readCarriers(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written, err := b.Write(sized(carriers, sizes, n), 0); err != nil || written != n {
+		t.Fatalf("Write() = (%d, %v), want (%d, nil)", written, err, n)
+	}
+	got := bNative.written()
+	if len(got) != 1 || !bytes.Equal(got[0], packet) {
+		t.Fatalf("restored packets = %d, want original packet", len(got))
+	}
+}
+
 func TestRoundTripFragmentsLargePacket(t *testing.T) {
 	t.Parallel()
 	packet := ipv4Packet(10, 0, 1500)
@@ -825,6 +853,16 @@ func TestNewRejectsNativeWriteOffsetPastMTU(t *testing.T) {
 	native := newFakeTUN("a", 1500)
 	config := pairConfig(t, native, true, 64)
 	config.NativeWriteOffset = 1501
+	if _, err := New(config); !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("New() error = %v, want ErrInvalidConfig", err)
+	}
+}
+
+func TestNewRejectsNativeReadOffsetPastMTU(t *testing.T) {
+	t.Parallel()
+	native := newFakeTUN("a", 1500)
+	config := pairConfig(t, native, true, 64)
+	config.NativeReadOffset = 1501
 	if _, err := New(config); !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("New() error = %v, want ErrInvalidConfig", err)
 	}
