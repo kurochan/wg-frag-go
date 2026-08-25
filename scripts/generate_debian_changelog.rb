@@ -20,7 +20,8 @@ end.parse!
 begin
   entries = ReleaseNotes.parse(options[:input])
   rendered = ReleaseNotes.render_debian(entries, options[:template])
-  File.write(options[:output], rendered) unless File.exist?(options[:output]) && File.read(options[:output]) == rendered
+  existing = File.read(options[:output], encoding: Encoding::UTF_8) if File.exist?(options[:output])
+  File.write(options[:output], rendered) unless existing == rendered
 rescue ReleaseNotes::Error => e
   warn e.message
   exit 1

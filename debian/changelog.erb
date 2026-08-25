@@ -1,5 +1,5 @@
 <% entries.each_with_index do |entry, index| -%>
-wg-frag-go (<%= entry.debian_version %>) noble; urgency=medium
+wg-frag-go (<%= entry.debian_version %>) noble; urgency=<%= entry.urgency %>
 
 <% entry.bullets.each do |bullet| -%>
 <%= format_bullet(bullet) %>
