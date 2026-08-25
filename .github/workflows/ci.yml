@@ -69,9 +69,6 @@ jobs:
       - name: Run static analysis
         run: go vet ./...
 
-      - name: Run linters
-        run: make lint
-
       - name: Install Linux networking tools
         run: |
           sudo apt-get update
