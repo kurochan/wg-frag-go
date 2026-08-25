@@ -74,9 +74,32 @@ jobs:
       - name: Run tests
         run: make test
 
+  verify-macos:
+    name: Verify release source (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out revision
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test ./...
+
   release:
     name: Publish GitHub Release
-    needs: verify
+    needs: [verify, verify-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

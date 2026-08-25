@@ -105,8 +105,9 @@ sudo systemctl daemon-reload
 The complete installation and operations guide is
 [`docs/install.md`](docs/install.md).
 
-Prebuilt Linux amd64 and arm64 archives and Debian packages are published on
-the [GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
+Prebuilt Linux amd64/arm64 archives and Debian packages, plus a macOS arm64
+archive, are published on the
+[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
 
 Packages for the currently supported Ubuntu series—22.04 (jammy), 24.04
 (noble), and 26.04 (resolute)—are also available from the

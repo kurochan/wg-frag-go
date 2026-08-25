@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.2.1 - 2026-08-25T03:26:10Z
+
+<!-- debian: urgency=medium -->
+
+- Publish a macOS arm64 `wgf` archive on GitHub Releases.
+- Verify release source on macOS before publishing release assets.
+
 ## 0.2.0 - 2026-08-25T01:49:35Z
 
 <!-- debian: urgency=medium -->

@@ -25,8 +25,10 @@ skill prepares text for human review; it does not perform a release.
 2. Identify the target release version and the previous reachable release tag.
    If an edit is requested but the target version is unspecified, ask for it;
    do not guess a version.
-   If the target already has an entry, review or update that entry rather than
-   adding a duplicate.
+   Check whether the target's `v` tag already exists. A tagged version is
+   published: do not edit its entry unless the user explicitly requests a
+   historical correction. For an untagged version, update an existing entry
+   rather than adding a duplicate.
 3. Review the commit range from the previous tag to `HEAD`, plus the current
    top entry in `RELEASE_NOTES.md`. Inspect changed files when a commit subject
    is insufficient to explain the user-visible effect.
@@ -75,7 +77,9 @@ Return:
 
 Only after an explicit request to apply the draft:
 
-1. add the new version section at the top of `RELEASE_NOTES.md`, using the
+1. confirm that the target's `v` tag does not exist. If it does, stop unless
+   the user explicitly requests a historical correction. Then add the new
+   version section at the top of `RELEASE_NOTES.md`, using the
    repository's `## VERSION - TIMESTAMP` heading syntax, a UTC timestamp
    obtained at edit time (for example, with `date -u`) in RFC 3339 format
    (`YYYY-MM-DDTHH:MM:SSZ`), and `<!-- debian: urgency=medium -->`. Do not

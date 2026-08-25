@@ -27,6 +27,22 @@ builds:
       - -X github.com/kurochan/wg-frag-go/internal/version.Version={{.Version}}
       - -X github.com/kurochan/wg-frag-go/internal/version.Commit={{.Commit}}
       - -X github.com/kurochan/wg-frag-go/internal/version.Date={{.Date}}
+  - id: wgf-macos
+    main: ./cmd/wgf
+    binary: wgf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/kurochan/wg-frag-go/internal/version.Version={{.Version}}
+      - -X github.com/kurochan/wg-frag-go/internal/version.Commit={{.Commit}}
+      - -X github.com/kurochan/wg-frag-go/internal/version.Date={{.Date}}
 
 archives:
   - id: binaries
@@ -40,6 +56,12 @@ archives:
       - README.md
       - README.ja.md
       - dist/systemd/*
+  - id: macos-binary
+    ids:
+      - wgf-macos
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 nfpms:
   - id: deb

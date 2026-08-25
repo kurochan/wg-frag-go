@@ -100,8 +100,8 @@ sudo systemctl daemon-reload
 
 詳細な導入・運用手順は [`docs/install.md`](docs/install.md) を参照してください。
 
-Linux amd64 / arm64 向けのバイナリarchiveとDebian packageは
-[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) で配布します。
+Linux amd64 / arm64 向けのバイナリarchiveとDebian package、macOS arm64向けの
+バイナリarchiveは[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases)で配布します。
 現在サポート対象として公開しているUbuntu 22.04（jammy）、24.04（noble）、
 26.04（resolute）向けpackageは
 [Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go) からも
