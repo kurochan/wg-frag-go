@@ -264,14 +264,16 @@ jobs:
           cp "$RUNNER_TEMP/wg-frag-go_${upstream_version}.orig.tar.gz" "$build_root/"
 
           changelog="$work_root/debian/changelog"
-          new_changelog="$changelog.new"
-          {
-            printf 'wg-frag-go (%s) %s; urgency=medium\n\n' "$series_version" "$TARGET_SERIES"
-            printf '  * Build for Ubuntu %s.\n\n' "$TARGET_SERIES"
-            printf ' -- %s <%s>  %s\n\n' "$DEBFULLNAME" "$DEBEMAIL" "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
-            cat "$changelog"
-          } > "$new_changelog"
-          mv "$new_changelog" "$changelog"
+          DEBIAN_VERSION="$series_version" DEBIAN_SERIES="$TARGET_SERIES" ruby - "$changelog" <<'RUBY'
+          path = ARGV.fetch(0)
+          changelog = File.read(path, encoding: Encoding::UTF_8)
+          header = /\Awg-frag-go \([^)]+\) [^;]+; urgency=([^\n]+)(\n)/
+          replacement = "wg-frag-go (#{ENV.fetch("DEBIAN_VERSION")}) #{ENV.fetch("DEBIAN_SERIES")}; urgency=\\1\\2"
+          updated = changelog.sub(header, replacement)
+          abort "could not rewrite Debian changelog header" if updated == changelog
+
+          File.write(path, updated, encoding: Encoding::UTF_8)
+          RUBY
 
           (
             cd "$work_root"
