@@ -24,9 +24,11 @@ window. The currently published series are Ubuntu 22.04 (jammy), 24.04
 
 ## Install a GitHub Release
 
-Release assets are published for Linux amd64 and arm64. Download the archive
-and `checksums.txt` for the same version, then verify the archive before
-installing it:
+Release assets are published for Linux amd64/arm64 and macOS arm64. Download
+the archive and `checksums.txt` for the same version, then verify the archive
+before installing it.
+
+### Linux
 
 ```sh
 sha256sum --check checksums.txt --ignore-missing
@@ -48,6 +50,18 @@ sudo apt install ./wg-frag-go_<version>_linux_<arch>.deb
 The Debian package installs `wgf`, the `wgf-quick` alias, systemd units, and
 the `/etc/wg-frag` directory. It does not enable or start a tunnel
 automatically.
+
+### macOS arm64
+
+The macOS archive contains `wgf` only. Install it on Apple silicon systems:
+
+```sh
+tar -xzf wg-frag-go_<version>_darwin_arm64.tar.gz
+sudo install -m 0755 wgf /usr/local/bin/wgf
+```
+
+macOS supports foreground `wgf run`; the operator configures addresses and
+routes on the allocated `utunN` interface.
 
 ## Install from the Launchpad PPA
 

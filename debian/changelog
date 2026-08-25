@@ -1,3 +1,10 @@
+wg-frag-go (0.2.1-1) noble; urgency=medium
+
+  * Publish a macOS arm64 `wgf` archive on GitHub Releases.
+  * Verify release source on macOS before publishing release assets.
+
+ -- kurochan <kuro@kurochan.org>  Tue, 25 Aug 2026 03:26:10 +0000
+
 wg-frag-go (0.2.0-1) noble; urgency=medium
 
   * Add native macOS support, including Darwin UDP transport and runtime
