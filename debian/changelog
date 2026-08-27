@@ -1,3 +1,9 @@
+wg-frag-go (0.3.0-1) noble; urgency=medium
+
+  * Move Ubuntu package publishing to the `kurochan/wg-frag-go` Launchpad PPA.
+
+ -- kurochan <kuro@kurochan.org>  Thu, 27 Aug 2026 09:49:00 +0000
+
 wg-frag-go (0.2.1-1) noble; urgency=medium
 
   * Publish a macOS arm64 `wgf` archive on GitHub Releases.

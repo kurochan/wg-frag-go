@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.3.0 - 2026-08-27T09:49:00Z
+
+<!-- debian: urgency=medium -->
+
+- Move Ubuntu package publishing to the `kurochan/wg-frag-go` Launchpad PPA.
+
 ## 0.2.1 - 2026-08-25T03:26:10Z
 
 <!-- debian: urgency=medium -->
