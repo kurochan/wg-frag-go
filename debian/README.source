@@ -33,7 +33,7 @@ package with:
 
 Upload each generated source changes file with:
 
-    dput ppa:wg-frag/wg-frag-go ../wg-frag-go_<version>_source.changes
+    dput ppa:kurochan/wg-frag-go ../wg-frag-go_<version>_source.changes
 
 The GitHub Actions job performs this upload for all supported series. On a
 workflow rerun, `GITHUB_RUN_ATTEMPT` increments the series suffix (`+jammy1`,

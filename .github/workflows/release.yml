@@ -281,4 +281,4 @@ jobs:
           changes_file="$(find "$build_root" -maxdepth 1 -type f -name '*_source.changes' -print -quit)"
           test -n "$changes_file"
           debsign -p"$signer" -k"$LAUNCHPAD_GPG_KEY_ID" "$changes_file"
-          dput ppa:wg-frag/wg-frag-go "$changes_file"
+          dput ppa:kurochan/wg-frag-go "$changes_file"
