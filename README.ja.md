@@ -104,12 +104,12 @@ Linux amd64 / arm64 向けのバイナリarchiveとDebian package、macOS arm64�
 バイナリarchiveは[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases)で配布します。
 現在サポート対象として公開しているUbuntu 22.04（jammy）、24.04（noble）、
 26.04（resolute）向けpackageは
-[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go) からも
+[Launchpad PPA](https://launchpad.net/~kurochan/+archive/ubuntu/wg-frag-go) からも
 インストールできます。非LTS releaseも、Canonicalのstandard support期間中は
 対象に追加します。
 
 ```sh
-sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo add-apt-repository ppa:kurochan/wg-frag-go
 sudo apt update
 sudo apt install wg-frag-go
 ```

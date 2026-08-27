@@ -71,7 +71,7 @@ support window. A series becomes installable after its package build has
 completed in Launchpad:
 
 ```sh
-sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo add-apt-repository ppa:kurochan/wg-frag-go
 sudo apt update
 sudo apt install wg-frag-go
 ```

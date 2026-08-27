@@ -111,12 +111,12 @@ archive, are published on the
 
 Packages for the currently supported Ubuntu series—22.04 (jammy), 24.04
 (noble), and 26.04 (resolute)—are also available from the
-[Launchpad PPA](https://launchpad.net/~wg-frag/+archive/ubuntu/wg-frag-go).
+[Launchpad PPA](https://launchpad.net/~kurochan/+archive/ubuntu/wg-frag-go).
 Non-LTS series are added while they remain in Canonical's standard support
 window:
 
 ```sh
-sudo add-apt-repository ppa:wg-frag/wg-frag-go
+sudo add-apt-repository ppa:kurochan/wg-frag-go
 sudo apt update
 sudo apt install wg-frag-go
 ```
