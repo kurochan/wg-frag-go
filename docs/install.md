@@ -80,6 +80,48 @@ PPA packages are built from the Debian source package in this repository.
 They install the same files as the GitHub Release package and do not enable or
 start a tunnel automatically.
 
+### Automatic updates and active tunnels
+
+Ubuntu does not include third-party PPAs in `unattended-upgrades` by default.
+If an operator explicitly adds this PPA to `Allowed-Origins`, every new package
+version from the PPA is eligible for the configured automatic-update policy;
+Launchpad PPAs do not provide a separate security-update pocket.
+
+The package itself does not enable, start, stop, or restart tunnel units during
+an upgrade. However, Ubuntu's `needrestart` policy can restart a running
+`wgf@<interface>.service` after an update, including after an Ubuntu security
+update replaces a library used by `wgf`. This is the default and recommended
+behavior: security updates take effect without delaying a required service
+restart.
+
+For gateways where an unscheduled tunnel interruption is less acceptable than
+deferring the restart, an operator may opt out of automatic `needrestart`
+selection for WGF units. This does not stop package upgrades; it only leaves a
+running WGF process on its current executable and libraries until a planned
+restart.
+
+```sh
+sudo install -d -m 0755 /etc/needrestart/conf.d
+sudoedit /etc/needrestart/conf.d/wg-frag-go.conf
+```
+
+Add the following line:
+
+```perl
+$nrconf{override_rc}{qr(^wgf@.+\.service$)} = 0;
+```
+
+Before a maintenance window, inspect pending restarts and then restart each
+affected tunnel explicitly:
+
+```sh
+sudo needrestart -r l
+sudo systemctl restart wgf@wgf0.service
+```
+
+Remove `/etc/needrestart/conf.d/wg-frag-go.conf` to return to the host's normal
+`needrestart` policy.
+
 ## Build and install from source
 
 ```sh
