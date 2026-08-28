@@ -2,12 +2,10 @@
 
 [日本語](README.ja.md)
 
-`wg-frag-go` is a userspace Layer 3 fragmentation and packing shim built
+`wg-frag-go` (WGF) is a userspace Layer 3 fragmentation and packing shim built
 around `wireguard-go`. It preserves a large inner IP MTU over a smaller
 underlay without changing WireGuard's handshake, Noise protocol, encryption,
 key rotation, endpoint roaming, or replay protection.
-
-The shim runs between a native L3 TUN and WireGuard's plaintext device:
 
 ```text
 inner IPv4/IPv6 packet
@@ -22,98 +20,38 @@ wireguard-go
 encrypted UDP/IP underlay
 ```
 
-Both endpoints must run WGF for DATA traffic. A stock WireGuard endpoint can
-still establish the underlying WireGuard session, but it does not understand
-WGF carriers.
+Both endpoints need WGF for DATA traffic. A stock WireGuard peer can establish
+the underlying WireGuard session but cannot exchange WGF carriers.
 
 ## Features
 
-- Inner MTU from 1280 through 9612 bytes (default: 1500).
-- Up to 16 fragments per inner packet.
-- Multiple records from different inner packets can share one carrier.
-- Fixed-size reassembly and reorder queues with bounded memory and no hot-path
-  allocation.
-- A hidden, deterministic IPv6 carrier address per WireGuard peer. The carrier
-  is not exposed as an interface address, route, or user-configured AllowedIP.
-- CONTROL carriers encoded with protobuf (edition 2024) for capability exchange,
-  sequence reset, peer MTU exchange, reachability checks, and PMTU discovery.
-- Runtime DPLPMTUD based on RFC 8899. DATA starts at the 613-byte base carrier
-  payload and grows after successful probes; a failed confirmation returns to
-  the base and retries with backoff.
-- Outer-UDP sockets that reject IP fragmentation and report local `EMSGSIZE`
-  failures to the PMTU engine. Linux uses `recvmmsg`/`sendmmsg` and UDP GSO/GRO
-  when available; macOS uses its native `utun` device and sequential UDP I/O.
-- WireGuard-style multi-peer configuration and `AllowedIPs` longest-prefix
-  selection plus ingress source validation.
-- `wgf` and `wgf-quick` command-line workflows, a per-interface Unix control
-  socket, gRPC control API, structured `slog` logging, and systemd units.
+- Inner MTU from 1280 through 9612 bytes, with up to 16 fragments per packet.
+- Carrier packing, bounded reassembly and reorder queues, and no normal
+  hot-path allocation.
+- Runtime DPLPMTUD based on RFC 8899, starting from a safe 613-byte carrier
+  payload and adapting to the path.
+- WireGuard-style multi-peer configuration, `AllowedIPs` selection and ingress
+  source validation, plus a local gRPC control API and systemd support.
 
-The wire format and state-machine rules are documented in
-[`docs/protocol.md`](docs/protocol.md).
+Read the [wire protocol](docs/protocol.md) for the compatibility boundary and
+state-machine rules.
 
-## Performance characteristics
+## Performance
 
-The steady-state WGF data path is designed to generate virtually no GC
-pressure. Fragmentation, carrier packing, reassembly, and reordering use
-buffers allocated when the device and peer state are created, so forwarding
-normally performs no heap allocation.
+WGF is designed for a low-GC steady-state forwarding path while retaining the
+configured inner MTU. In a four-vCPU cross-region reference environment, one
+TCP flow reached about 0.7 Gbps and four parallel flows reached 2.5–2.8 Gbps
+at inner MTUs from 1500 through 9600 bytes. These are reference measurements,
+not throughput guarantees. See [benchmarks](docs/benchmark.md) for the method,
+full results, and local validation.
 
-As a reference point, an 8-second TCP transfer over a multi-region Internet
-path between two four-vCPU Ubuntu 26.04 instances measured the following. The
-underlay PMTU was 1500 bytes and RTT was approximately 33–35 ms; no artificial
-packet loss was applied.
+## Quick start
 
-| Path | Inner MTU | Average RTT | Single flow | Four flows |
-| --- | ---: | ---: | ---: | ---: |
-| Direct public path | — | 35.14 ms | 0.84 Gbps | 3.03 Gbps |
-| Kernel WireGuard | 1420 | 33.11 ms | 0.87 Gbps | 3.12 Gbps |
-| WGF | 1500 | 34.07 ms | 0.71 Gbps | 2.83 Gbps |
-| WGF | 3000 | 33.85 ms | 0.71 Gbps | 2.52 Gbps |
-| WGF | 6000 | 34.05 ms | 0.70 Gbps | 2.74 Gbps |
-| WGF | 9600 | 34.08 ms | 0.70 Gbps | 2.74 Gbps |
+WGF runs on Linux amd64/arm64 and macOS amd64/arm64. Linux supports both
+`wgf run` and `wgf quick`; macOS currently supports `wgf run` only. Interface
+creation and route management require root or equivalent network privileges.
 
-These are implementation reference measurements, not hardware limits or a
-guarantee of Internet throughput. The WGF results stayed near 0.7 Gbps for a
-single flow while preserving the configured inner MTU; four parallel flows
-reached approximately 2.5–2.8 Gbps in this run. Cross-region observations,
-local namespace results, and the benchmark method are recorded in
-[`docs/benchmark.md`](docs/benchmark.md).
-
-The latency column is the measured end-to-end average RTT for each path, not
-additional WGF processing latency.
-
-## Requirements
-
-The runtime supports Linux on amd64 and arm64, and macOS on arm64 and amd64.
-Building the binary requires Go 1.26.0 or newer. Linux supports both `wgf run`
-and `wgf quick`; macOS currently supports `wgf run` only. macOS allocates a
-native `utunN` device and leaves addresses and routes under operator control.
-Running an interface normally requires root or equivalent network privileges.
-
-## Build and install
-
-```sh
-make build
-sudo install -m 0755 bin/wgf /usr/bin/wgf
-sudo ln -sf wgf /usr/bin/wgf-quick
-sudo install -d -m 0700 /etc/wg-frag
-sudo install -m 0644 dist/systemd/wgf@.service dist/systemd/wgf.target \
-  /usr/lib/systemd/system/
-sudo systemctl daemon-reload
-```
-
-The complete installation and operations guide is
-[`docs/install.md`](docs/install.md).
-
-Prebuilt Linux amd64/arm64 archives and Debian packages, plus a macOS arm64
-archive, are published on the
-[GitHub Releases](https://github.com/kurochan/wg-frag-go/releases) page.
-
-Packages for the currently supported Ubuntu series—22.04 (jammy), 24.04
-(noble), and 26.04 (resolute)—are also available from the
-[Launchpad PPA](https://launchpad.net/~kurochan/+archive/ubuntu/wg-frag-go).
-Non-LTS series are added while they remain in Canonical's standard support
-window:
+Install on a supported Ubuntu release from the Launchpad PPA:
 
 ```sh
 sudo add-apt-repository ppa:kurochan/wg-frag-go
@@ -121,197 +59,63 @@ sudo apt update
 sudo apt install wg-frag-go
 ```
 
-The PPA and GitHub packages do not enable or start a tunnel automatically.
-
-Protobuf generation uses the pinned tools in `tools/go.mod`:
-
-```sh
-make proto
-make proto-check
-go tool -modfile=tools/go.mod buf lint
-```
-
-## Configuration
-
-Configuration follows the familiar WireGuard INI shape. A minimal interface
-contains an address, a private key, and one or more peers:
-
-```ini
-[Interface]
-Address = 10.0.0.1/24
-PrivateKey = <base64-private-key>
-ListenPort = 51820
-MTU = 1500
-
-[Peer]
-PublicKey = <base64-peer-public-key>
-Endpoint = example.net:51820
-AllowedIPs = 10.0.0.2/32
-PersistentKeepalive = 25
-PresharedKey = <base64-preshared-key>
-```
-
-`MTU` is the inner TUN MTU. The configured value must be between 1280 and
-9612 bytes; WGF fragments packets that exceed the current carrier payload.
-WGF-specific settings control the base and maximum carrier payload, PMTU
-discovery, reassembly capacity and lifetime, reorder behavior, and UDP socket
-buffers. See [`docs/configuration.md`](docs/configuration.md) for the accepted
-values, defaults, and tuning guidance.
-
-`PresharedKey` is optional and uses the standard 32-byte WireGuard preshared
-key format. Generate one with `wgf genpsk`.
-
-User `AllowedIPs` are used for outbound peer selection and for validating the
-source address of reassembled inbound packets. WGF's hidden carrier addresses
-are managed internally and must not be added to the user configuration.
-
-## Commands
+Create `/etc/wg-frag/wgf0.conf` from
+[`examples/wgf0.conf.example`](examples/wgf0.conf.example), protect it with
+mode `0600`, then validate and start it:
 
 ```sh
-wgf genkey | tee private.key | wgf pubkey
-wgf genpsk
-wgf version
-wgf check --config /etc/wg-frag/wgf0.conf
-
-# Foreground daemon
-sudo wgf run wgf0 --config /etc/wg-frag/wgf0.conf
-
-# Linux-only wg-quick-style lifecycle (wgf-quick is an executable-name alias)
-sudo wgf quick up wgf0
-sudo wgf quick down wgf0
-sudo wgf quick save wgf0
-sudo wgf quick strip wgf0
-
-# systemd lifecycle
+sudo wgf check --config /etc/wg-frag/wgf0.conf
 sudo systemctl enable --now wgf@wgf0
-sudo systemctl stop wgf@wgf0
-
-# Status and configuration
-wgf show
-wgf show all
-wgf show interfaces
-wgf show wgf0
-wgf show wgf0 fragment
-wgf show wgf0 path-mtu
-wgf show wgf0 stats
-wgf showconf wgf0
-wgf set wgf0 peer <base64-public-key> endpoint example.net:51820 allowed-ips 10.0.0.2/32
-wgf setconf wgf0 /etc/wg-frag/wgf0.conf
-wgf addconf wgf0 /etc/wg-frag/peers.conf
-wgf syncconf wgf0 /etc/wg-frag/wgf0.conf
+sudo wgf show wgf0
 ```
 
-`wgf-quick` is an alias for `wgf quick`; `wgf run` remains a foreground
-per-interface daemon. `wgf quick` creates the interface, starts the daemon,
-and applies addresses and routes. `Table = auto` provides the WireGuard-style
-full-tunnel policy-routing rules and endpoint-route exemption. `Table = off`
-leaves route management to the caller.
+Packages do not automatically enable or start tunnel units. GitHub Release
+archives, installation alternatives, configuration details, operational
+diagnostics, and upgrade behavior are in [Installation and operations](docs/install.md).
 
-`show all` queries every active local interface, while `show interfaces` lists
-their names. The `fragment`, `path-mtu`, and `stats` views expose fragmentation,
-PMTU, and counter details for one interface. `set` changes peer fields at
-runtime. `setconf` replaces the peer set from a configuration file, `addconf`
-merges its peers, and `syncconf` applies the replacement while preserving
-existing sessions.
+## Documentation
 
-## Logging and management
+- [Installation and operations](docs/install.md): release packages, PPA,
+  starting, diagnostics, AppArmor, and upgrades.
+- [Configuration reference](docs/configuration.md): all interface, peer, and
+  WGF-specific settings.
+- [Wire protocol](docs/protocol.md): carrier formats, capabilities, PMTU, and
+  reassembly behavior.
+- [Security model](docs/threat-model.md): trust boundary, validation, and
+  residual risks.
+- [Benchmarks](docs/benchmark.md): reproducible Internet and Linux results.
 
-The daemon writes structured logs with Go's `log/slog` package. Normal INFO
-events are limited to startup, shutdown, configuration changes, forwarding
-state changes, and PMTU changes. Packet-level failures are counted and
-rate-limited rather than logged individually.
+## Development
 
-Diagnostic behavior can be adjusted with environment variables:
-
-- `WGF_LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`, or `silent`.
-- `WGF_LOG_FORMAT`: `text` (default) or `json`.
-- `WGF_CPU_PROFILE`: write a Go CPU profile to the specified path while the
-  daemon runs. This is an operator diagnostic and should normally be unset;
-  protect the output because it can reveal runtime and workload details.
-
-These are diagnostic environment variables, not configuration-file settings.
-
-Each interface exposes a private Unix socket under
-`/run/wg-frag/<interface>.sock` with mode 0600. `wgf show`, `set`,
-`setconf`, `addconf`, and `syncconf` use the gRPC `controlapi/v1` service over
-that socket. The socket is local-only and is not a network listener.
-
-## Protocol and behavior
-
-WGF DATA and CONTROL carriers are never mixed. DATA records have a 12-byte
-header containing the fragment index/count, wire lane, 16-bit data session,
-32-bit lane sequence, and original packet offset. The carrier payload contains
-as many complete records as fit; a record count is not transmitted.
-
-The sender drains each TUN batch to `EAGAIN` and flushes all partial carriers
-immediately; there is no packing-delay timer. Reassembly waits for all
-fragments of a packet, while reorder is applied independently to completed
-packets within each lane. A reorder gap is held for at most the configured
-short delay (10 ms by default) and then skipped.
-
-Native IPv4 fragments and IPv6 Fragment Header packets are rejected and counted.
-WGF does not retransmit inner packets. WireGuard provides authentication,
-confidentiality, and outer replay protection; WGF validates carrier structure,
-peer identity, session state, sequence state, and user `AllowedIPs` after
-decryption.
-
-## Testing
-
-The normal test suite, lint, and race checks do not require a privileged Linux
-environment:
+Building requires Go 1.26.0 or newer. The normal validation suite does not
+require privileged networking:
 
 ```sh
+make build
 go test ./...
 make lint
 make test-race
 ```
 
-Fuzz targets cover configuration parsing, inner IP parsing, carrier and
-CONTROL decoding, receiver input handling, and reassembly lifetime handling:
+Privileged Linux network-namespace tests and benchmark commands are documented
+in [benchmarks](docs/benchmark.md).
 
-```sh
-make fuzz
-FUZZTIME=5m make fuzz
-```
-
-Privileged Linux integration tests are opt-in. They create temporary network
-namespaces, veth links, TUN devices, and WireGuard peers entirely from Go;
-they do not mount host directories or invoke `ip`, `tc`, or `tcpdump`:
-
-```sh
-make test-netns
-make test-netns-control-recovery
-make test-netns-base-recovery
-make test-netns-no-fragment
-make bench-netns
-```
-
-The reproducible measurement procedure and retained Linux observations are in
-[`docs/benchmark.md`](docs/benchmark.md).
-
-The tests require Linux networking capabilities (normally `CAP_NET_ADMIN` and
-`CAP_NET_RAW`) and `/dev/net/tun`. Fault-injection variants are selected by the
-`WGF_NETNS_*` environment variables described in the Makefile and test names.
-
-## Security model
+## Security
 
 WireGuard remains the cryptographic and peer-authentication boundary. WGF
-treats authenticated peers as potentially malformed: all carrier lengths,
-record ranges, protobuf limits, session transitions, reassembly bounds, and
-source prefixes are checked before a packet reaches the TUN. See
-[`docs/threat-model.md`](docs/threat-model.md) for the detailed trust boundary
-and operational assumptions.
+validates carrier structure, peer and session state, resource bounds, and
+inner source prefixes before delivering a packet to the TUN. See the
+[security model](docs/threat-model.md) for details.
+
+Report vulnerabilities privately using [SECURITY.md](SECURITY.md), not a
+public issue.
 
 ## License
 
-This project is distributed under the MIT License; see [`LICENSE`](LICENSE).
-
-Security reports are handled on a best-effort basis without warranty. Use the
-private reporting instructions in [`SECURITY.md`](SECURITY.md) rather than
-publishing sensitive details in an issue.
+This project is distributed under the MIT License; see [LICENSE](LICENSE).
 
 ## Project relationship
 
-wg-frag-go uses the WireGuard protocol and the `wireguard-go` implementation,
-but it is an independent project and is not affiliated with, endorsed by, or
-part of the WireGuard project.
+wg-frag-go uses the WireGuard protocol and `wireguard-go`, but is an
+independent project and is not affiliated with, endorsed by, or part of the
+WireGuard project.

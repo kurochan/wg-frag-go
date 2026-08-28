@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Keep systemd's unit cache in sync when a package upgrade replaces a unit.
+# The package intentionally does not enable, start, stop, or restart tunnels.
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+	if [ -d /run/systemd/system ]; then
+		systemctl daemon-reload >/dev/null || true
+	fi
+fi
+
+#DEBHELPER#
