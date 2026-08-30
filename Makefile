@@ -1,5 +1,5 @@
 .PHONY: build clean lint tools-download proto proto-check test test-race fuzz release-notes-generate \
-	release-notes-check \
+	release-notes-check release-tag-check \
 	test-netns bench-netns \
 	test-netns-control-recovery test-netns-base-recovery \
 	test-netns-base-failure-recovery test-netns-no-fragment test-netns-no-fragmentation
@@ -40,6 +40,10 @@ release-notes-generate:
 
 release-notes-check:
 	ruby scripts/check_release_notes_sync.rb
+
+release-tag-check:
+	test -n "$(VERSION)"
+	ruby scripts/check_release_tag_order.rb --version "$(VERSION)"
 
 test:
 	go test ./...
