@@ -1,3 +1,12 @@
+wg-frag-go (0.4.1-1) noble; urgency=medium
+
+  * Reject release tags that do not advance beyond the latest existing release,
+    using Semantic Versioning ordering for release candidates.
+  * Add `make release-tag-check VERSION=vX.Y.Z` for the same validation before
+    creating a tag.
+
+ -- kurochan <kuro@kurochan.org>  Sun, 30 Aug 2026 13:51:12 +0000
+
 wg-frag-go (0.4.0-1) noble; urgency=medium
 
   * Add an optional OpenMetrics endpoint with loopback-only default binding and
