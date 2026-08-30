@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.4.0 - 2026-08-30T13:38:47Z
+
+<!-- debian: urgency=medium -->
+
+- Add an optional OpenMetrics endpoint with loopback-only default binding and configurable metric selection.
+- Allow `wgf check` to validate configurations that include `wgf quick` settings without running hooks or inspecting host routes.
+- Document installation from the Launchpad PPA and the OpenMetrics configuration.
+
 ## 0.3.0 - 2026-08-27T09:49:00Z
 
 <!-- debian: urgency=medium -->
