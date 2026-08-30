@@ -55,6 +55,22 @@ func TestRunCheck(t *testing.T) {
 	}
 }
 
+func TestRunCheckAcceptsQuickSettings(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "wgf0.conf")
+	quickConfig := strings.Replace(testConfig, "PrivateKey = AQ", "Table = off\nPostUp = true\nPrivateKey = AQ", 1)
+	if err := os.WriteFile(path, []byte(quickConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"check", "--config", path}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "configuration is valid\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunCheckRequiresPath(t *testing.T) {
 	t.Parallel()
 	if err := run([]string{"check"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {

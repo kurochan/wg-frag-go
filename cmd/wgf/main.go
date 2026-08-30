@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/internal/quick"
 	"github.com/kurochan/wg-frag-go/internal/version"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter"
 )
@@ -90,12 +90,16 @@ func check(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("unexpected argument %q", flags.Arg(0))
 	}
 
-	cfg, err := config.ParseFile(*path)
+	text, err := os.ReadFile(*path)
+	if err != nil {
+		return err
+	}
+	parsed, err := quick.Parse(string(text))
 	if err != nil {
 		return err
 	}
 
-	if _, err := wgadapter.PreparePeers(cfg); err != nil {
+	if _, err := wgadapter.PreparePeers(parsed.Config); err != nil {
 		return err
 	}
 

@@ -2,7 +2,8 @@
 
 WGF reads WireGuard-style INI files. On Linux, `wgf quick up <interface>` reads
 `/etc/wg-frag/<interface>.conf`; `wgf run` accepts an explicit path. Validate a
-file before starting it:
+file before starting it. `check` accepts both runtime settings and quick-only
+settings, but does not run hooks or inspect the host routing state:
 
 ```sh
 wgf check --config /etc/wg-frag/wgf0.conf
