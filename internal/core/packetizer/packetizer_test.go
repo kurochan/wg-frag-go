@@ -147,6 +147,7 @@ func TestPacketizerHotPathDoesNotAllocate(t *testing.T) {
 }
 
 func TestPacketizerDoesNotRetainInputDescriptors(t *testing.T) {
+	t.Parallel()
 	var p Packetizer
 	emitter := failedEmitter{err: errors.New("must not flush")}
 	if err := p.Init(make([]byte, limits.DefaultCarrierPayload), Config{CarrierPayload: limits.DefaultCarrierPayload, MinPack: limits.DefaultMinPackData}, emitter); err != nil {
@@ -164,6 +165,7 @@ func TestPacketizerDoesNotRetainInputDescriptors(t *testing.T) {
 }
 
 func TestPacketizerClearsDescriptorsAfterPreFlushFailure(t *testing.T) {
+	t.Parallel()
 	var p Packetizer
 	errEmit := errors.New("emit failed")
 	if err := p.Init(make([]byte, limits.DefaultCarrierPayload), Config{CarrierPayload: limits.DefaultCarrierPayload, MinPack: limits.DefaultMinPackData}, failedEmitter{err: errEmit}); err != nil {

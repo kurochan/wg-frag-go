@@ -6,6 +6,7 @@ import (
 )
 
 func TestExpirySetUpdatesHeapIndexAndPrunesInOrder(t *testing.T) {
+	t.Parallel()
 	set := newExpirySet[int](3)
 	base := time.Unix(1_000, 0)
 	if !set.retain(1, base.Add(time.Second)) ||
@@ -33,6 +34,7 @@ func TestExpirySetUpdatesHeapIndexAndPrunesInOrder(t *testing.T) {
 }
 
 func TestExpirySetDoesNotEvictLiveEntryWhenFull(t *testing.T) {
+	t.Parallel()
 	set := newExpirySet[int](1)
 	base := time.Unix(1_000, 0)
 	if !set.retain(1, base.Add(time.Second)) {
@@ -48,6 +50,7 @@ func TestExpirySetDoesNotEvictLiveEntryWhenFull(t *testing.T) {
 }
 
 func TestExpirySetStartsSmallButKeepsBound(t *testing.T) {
+	t.Parallel()
 	set := newExpirySet[int](4096)
 	if cap(set.entries) != expirySetInitialCapacity {
 		t.Fatalf("initial heap capacity = %d, want %d", cap(set.entries), expirySetInitialCapacity)

@@ -89,24 +89,30 @@ func TestEffectiveListenPort(t *testing.T) {
 
 func TestMetricsStartClosesPartialListeners(t *testing.T) {
 	t.Parallel()
-	first, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstAddress := first.Addr().String()
-	_ = first.Close()
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = occupied.Close() }()
-	_, portText, err := net.SplitHostPort(occupied.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = startMetricsServer(config.Interface{MetricsListen: config.MetricsListen{Addresses: []string{firstAddress, "127.0.0.1:" + portText}}}, 0, nil, func() metrics.Snapshot { return metrics.Snapshot{} })
+	var firstAddress string
+	calls := 0
+	_, err := startMetricsServerWithListen(
+		config.Interface{MetricsListen: config.MetricsListen{Addresses: []string{"127.0.0.1:1", "127.0.0.1:2"}}},
+		0,
+		nil,
+		func() metrics.Snapshot { return metrics.Snapshot{} },
+		func(_, _ string) (net.Listener, error) {
+			calls++
+			if calls == 2 {
+				return nil, errors.New("injected listen failure")
+			}
+			listener, listenErr := net.Listen("tcp", "127.0.0.1:0")
+			if listenErr == nil {
+				firstAddress = listener.Addr().String()
+			}
+			return listener, listenErr
+		},
+	)
 	if err == nil {
-		t.Fatal("startMetricsServer succeeded with an occupied listener")
+		t.Fatal("startMetricsServerWithListen unexpectedly succeeded")
+	}
+	if calls != 2 || firstAddress == "" {
+		t.Fatalf("listen calls = %d, first address = %q", calls, firstAddress)
 	}
 	probe, err := net.Listen("tcp", firstAddress)
 	if err != nil {

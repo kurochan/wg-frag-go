@@ -85,6 +85,7 @@ func mtuProbe() *wirev1.MtuProbe {
 }
 
 func TestControlSchedulerRingEvictionAndCoalesce(t *testing.T) {
+	t.Parallel()
 	codec, err := corecontrol.NewCodec(613)
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +129,7 @@ func TestControlSchedulerRingEvictionAndCoalesce(t *testing.T) {
 }
 
 func TestControlSchedulerAdmissionPreservesOtherPeerCriticalCapacity(t *testing.T) {
+	t.Parallel()
 	codec, err := corecontrol.NewCodec(613)
 	if err != nil {
 		t.Fatal(err)
@@ -150,6 +152,7 @@ func TestControlSchedulerAdmissionPreservesOtherPeerCriticalCapacity(t *testing.
 }
 
 func TestControlSchedulerAdmissionScalesBeyondFourPeers(t *testing.T) {
+	t.Parallel()
 	codec, err := corecontrol.NewCodec(613)
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +180,7 @@ func TestControlSchedulerAdmissionScalesBeyondFourPeers(t *testing.T) {
 }
 
 func TestControlSchedulerProbeMaterialization(t *testing.T) {
+	t.Parallel()
 	codec, err := corecontrol.NewCodec(613)
 	if err != nil {
 		t.Fatal(err)
@@ -204,6 +208,7 @@ func TestControlSchedulerProbeMaterialization(t *testing.T) {
 }
 
 func TestControlSchedulerPeerRoundRobinAndRateLimit(t *testing.T) {
+	t.Parallel()
 	codec, err := corecontrol.NewCodec(613)
 	if err != nil {
 		t.Fatal(err)
@@ -251,6 +256,7 @@ func TestControlSchedulerPeerRoundRobinAndRateLimit(t *testing.T) {
 }
 
 func TestControlSchedulerPeerBucketsRemainBounded(t *testing.T) {
+	t.Parallel()
 	s := newControlScheduler(16, []peerroute.PeerID{0})
 	s.updatePeers([]peerroute.PeerID{100, 200})
 	s.updatePeers([]peerroute.PeerID{200})

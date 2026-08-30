@@ -131,6 +131,7 @@ func TestRemoveStaleSocketRejectsReplacedPath(t *testing.T) {
 }
 
 func TestConcurrentNewHasSingleSocketOwner(t *testing.T) {
+	t.Parallel()
 	path := shortSocketPath(t)
 	fd, err := unix.Socket(unix.AF_UNIX, unix.SOCK_STREAM, 0)
 	if err != nil {
