@@ -42,6 +42,10 @@ All WGF-specific settings belong in `[Interface]`.
 | `WGFSocketBuffer` | `3145728` | `65536` through `268435456` bytes | Requested size for each outer UDP send and receive buffer. The kernel may cap the effective size. |
 | `WGFWorkers` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one shim worker and logs a warning for an explicit value. |
 | `WGFTUNQueues` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one TUN queue and logs a warning for an explicit value. |
+| `WGFMetrics` | `off` | `off` or `on` | Enables the unauthenticated OpenMetrics endpoint. |
+| `WGFMetricsListen` | `auto` | `auto` or comma-separated IP-literal `host:port` values | `auto` attempts `127.0.0.1` and `::1` using the effective UDP `ListenPort` number over TCP; one available family is sufficient. Explicit non-loopback listeners are allowed, but expose metrics without authentication. |
+| `WGFMetricsInclude` | unset | Comma-separated metric-name patterns | Limits exposed metrics. A pattern has at most one `*`; empty means every metric. |
+| `WGFMetricsExclude` | unset | Comma-separated metric-name patterns | Removes metrics after inclusion. Exclude takes precedence. |
 
 The reassembly allocation for one peer is approximately
 `WGFPeerReassemblySlots * MTU`, plus metadata and completed-packet/reorder
@@ -62,9 +66,46 @@ one 16-byte WireGuard padding bucket below the IPv6 protocol maximum.
 | `Endpoint` | unset | Hostname or IP address with UDP port. IPv6 endpoints use brackets. |
 | `AllowedIPs` | unset | One or more comma-separated CIDR prefixes. Used for outbound peer selection and inbound source validation. |
 | `PersistentKeepalive` | `off` | `off` or an integer number of seconds. |
+| `WGFPeerID` | derived | Lowercase letters, digits, `_`, or `-`, up to 32 characters | Optional stable `peer_id` label for peer metrics. It must be unique within the interface. When omitted, WGF derives a 16-character opaque ID from the WireGuard public key. |
 
 Do not add WGF's hidden carrier addresses to `AllowedIPs`; WGF derives and
 installs them internally.
+
+## Metrics
+
+When `WGFMetrics = on`, WGF serves `GET /metrics` and `HEAD /metrics` in
+OpenMetrics text format. The endpoint creates a snapshot only when requested;
+the completed response is reused for up to one second to bound repeated scrape
+work without a background collector or metric library in the packet path. By default,
+the TCP port matches `ListenPort`, so a configuration using `ListenPort =
+51820` exposes `http://127.0.0.1:51820/metrics` and
+`http://[::1]:51820/metrics`.
+
+Metric selection uses canonical metric names such as `wgf_tx_carriers_total`
+and `wgf_peer_pmtu_*`. Each pattern may contain one `*`; `?`, character
+classes, and regular expressions are not supported. Unknown or unmatched
+patterns reject the configuration.
+
+For example:
+
+```ini
+WGFMetrics = on
+WGFMetricsInclude = wgf_tx_*,wgf_rx_*,wgf_peer_pmtu_*
+WGFMetricsExclude = wgf_*_drops_total
+```
+
+The endpoint has no authentication or TLS. Keep the default loopback binding
+unless a protected local collector requires another address. Datadog Agent can
+scrape it with its OpenMetrics integration:
+
+```yaml
+instances:
+  - openmetrics_endpoint: http://127.0.0.1:51820/metrics
+    namespace: wgf
+```
+
+Datadog treats these as custom metrics; select only the metrics needed
+by the deployment.
 
 ## Runtime peer updates
 

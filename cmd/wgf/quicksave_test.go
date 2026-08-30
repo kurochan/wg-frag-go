@@ -33,6 +33,7 @@ AllowedIPs = 192.0.2.0/24
 		PersistentKeepaliveSec: &keepalive,
 	}.Build()
 	peer.SetPresharedKey(psk)
+	peer.SetMetricsId("edge-a")
 	status := controlapiv1.GetStatusResponse_builder{Peers: []*controlapiv1.PeerStatus{peer}}.Build()
 
 	rendered, err := renderSavedConfig(source, status)
@@ -46,6 +47,7 @@ AllowedIPs = 192.0.2.0/24
 		"AllowedIPs = 10.0.0.0/24, 10.1.0.0/24",
 		"PersistentKeepalive = 25",
 		"PresharedKey = " + base64.StdEncoding.EncodeToString(psk),
+		"WGFPeerID = edge-a",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered config lacks %q:\n%s", want, rendered)

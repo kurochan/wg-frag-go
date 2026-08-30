@@ -20,6 +20,10 @@ MTU = 1500
 # WGFSocketBuffer = 3145728
 # WGFWorkers = auto
 # WGFTUNQueues = auto
+# WGFMetrics = off
+# WGFMetricsListen = auto
+# WGFMetricsInclude =
+# WGFMetricsExclude =
 
 [Peer]
 PublicKey = <base64-peer-public-key>
@@ -27,3 +31,4 @@ Endpoint = peer.example.net:51820
 AllowedIPs = 10.0.0.2/32
 PersistentKeepalive = 25
 # PresharedKey = <base64-preshared-key>
+# WGFPeerID = edge-a

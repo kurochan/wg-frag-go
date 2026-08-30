@@ -47,6 +47,11 @@ func renderSavedConfig(source string, status *controlapiv1.GetStatusResponse) (s
 			out.WriteString(strconv.FormatUint(uint64(keepalive), 10))
 			out.WriteByte('\n')
 		}
+		if metricsID := peer.GetMetricsId(); metricsID != "" {
+			out.WriteString("WGFPeerID = ")
+			out.WriteString(metricsID)
+			out.WriteByte('\n')
+		}
 		if peer.HasPresharedKey() {
 			out.WriteString("PresharedKey = ")
 			out.WriteString(base64.StdEncoding.EncodeToString(peer.GetPresharedKey()))

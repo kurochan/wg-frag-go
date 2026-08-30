@@ -279,6 +279,7 @@ type DesiredPeer struct {
 	xxx_hidden_PersistentKeepaliveSec uint32                 `protobuf:"varint,4,opt,name=persistent_keepalive_sec,json=persistentKeepaliveSec"`
 	xxx_hidden_PresharedKey           []byte                 `protobuf:"bytes,5,opt,name=preshared_key,json=presharedKey"`
 	xxx_hidden_PresharedKeyAction     PresharedKeyAction     `protobuf:"varint,6,opt,name=preshared_key_action,json=presharedKeyAction,enum=wgf.controlapi.v1.PresharedKeyAction"`
+	xxx_hidden_MetricsId              *string                `protobuf:"bytes,7,opt,name=metrics_id,json=metricsId"`
 	XXX_raceDetectHookData            protoimpl.RaceDetectHookData
 	XXX_presence                      [1]uint32
 	unknownFields                     protoimpl.UnknownFields
@@ -360,14 +361,24 @@ func (x *DesiredPeer) GetPresharedKeyAction() PresharedKeyAction {
 	return PresharedKeyAction_PRESERVE
 }
 
+func (x *DesiredPeer) GetMetricsId() string {
+	if x != nil {
+		if x.xxx_hidden_MetricsId != nil {
+			return *x.xxx_hidden_MetricsId
+		}
+		return ""
+	}
+	return ""
+}
+
 func (x *DesiredPeer) SetPublicKey(v string) {
 	x.xxx_hidden_PublicKey = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 6)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
 }
 
 func (x *DesiredPeer) SetEndpoint(v string) {
 	x.xxx_hidden_Endpoint = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 6)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
 }
 
 func (x *DesiredPeer) SetAllowedIps(v []string) {
@@ -376,7 +387,7 @@ func (x *DesiredPeer) SetAllowedIps(v []string) {
 
 func (x *DesiredPeer) SetPersistentKeepaliveSec(v uint32) {
 	x.xxx_hidden_PersistentKeepaliveSec = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 6)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
 }
 
 func (x *DesiredPeer) SetPresharedKey(v []byte) {
@@ -384,12 +395,17 @@ func (x *DesiredPeer) SetPresharedKey(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_PresharedKey = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 6)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 7)
 }
 
 func (x *DesiredPeer) SetPresharedKeyAction(v PresharedKeyAction) {
 	x.xxx_hidden_PresharedKeyAction = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 6)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 7)
+}
+
+func (x *DesiredPeer) SetMetricsId(v string) {
+	x.xxx_hidden_MetricsId = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
 }
 
 func (x *DesiredPeer) HasPublicKey() bool {
@@ -427,6 +443,13 @@ func (x *DesiredPeer) HasPresharedKeyAction() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
 }
 
+func (x *DesiredPeer) HasMetricsId() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+}
+
 func (x *DesiredPeer) ClearPublicKey() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_PublicKey = nil
@@ -452,6 +475,11 @@ func (x *DesiredPeer) ClearPresharedKeyAction() {
 	x.xxx_hidden_PresharedKeyAction = PresharedKeyAction_PRESERVE
 }
 
+func (x *DesiredPeer) ClearMetricsId() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+	x.xxx_hidden_MetricsId = nil
+}
+
 type DesiredPeer_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -463,6 +491,9 @@ type DesiredPeer_builder struct {
 	// or cleared during a peer-set update.
 	PresharedKey       []byte
 	PresharedKeyAction *PresharedKeyAction
+	// Optional stable identifier exposed only in metrics labels. An empty value
+	// selects the deterministic public-key-derived identifier.
+	MetricsId *string
 }
 
 func (b0 DesiredPeer_builder) Build() *DesiredPeer {
@@ -470,25 +501,29 @@ func (b0 DesiredPeer_builder) Build() *DesiredPeer {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.PublicKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 6)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 7)
 		x.xxx_hidden_PublicKey = b.PublicKey
 	}
 	if b.Endpoint != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 6)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 7)
 		x.xxx_hidden_Endpoint = b.Endpoint
 	}
 	x.xxx_hidden_AllowedIps = b.AllowedIps
 	if b.PersistentKeepaliveSec != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 6)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 7)
 		x.xxx_hidden_PersistentKeepaliveSec = *b.PersistentKeepaliveSec
 	}
 	if b.PresharedKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 6)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 7)
 		x.xxx_hidden_PresharedKey = b.PresharedKey
 	}
 	if b.PresharedKeyAction != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 6)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 7)
 		x.xxx_hidden_PresharedKeyAction = *b.PresharedKeyAction
+	}
+	if b.MetricsId != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 7)
+		x.xxx_hidden_MetricsId = b.MetricsId
 	}
 	return m0
 }
@@ -956,6 +991,7 @@ type PeerStatus struct {
 	xxx_hidden_ControlPathState        *string                `protobuf:"bytes,11,opt,name=control_path_state,json=controlPathState"`
 	xxx_hidden_ControlPathError        *string                `protobuf:"bytes,12,opt,name=control_path_error,json=controlPathError"`
 	xxx_hidden_PresharedKey            []byte                 `protobuf:"bytes,13,opt,name=preshared_key,json=presharedKey"`
+	xxx_hidden_MetricsId               *string                `protobuf:"bytes,14,opt,name=metrics_id,json=metricsId"`
 	XXX_raceDetectHookData             protoimpl.RaceDetectHookData
 	XXX_presence                       [1]uint32
 	unknownFields                      protoimpl.UnknownFields
@@ -1090,14 +1126,24 @@ func (x *PeerStatus) GetPresharedKey() []byte {
 	return nil
 }
 
+func (x *PeerStatus) GetMetricsId() string {
+	if x != nil {
+		if x.xxx_hidden_MetricsId != nil {
+			return *x.xxx_hidden_MetricsId
+		}
+		return ""
+	}
+	return ""
+}
+
 func (x *PeerStatus) SetPublicKey(v string) {
 	x.xxx_hidden_PublicKey = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 14)
 }
 
 func (x *PeerStatus) SetEndpoint(v string) {
 	x.xxx_hidden_Endpoint = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 14)
 }
 
 func (x *PeerStatus) SetAllowedIps(v []string) {
@@ -1106,47 +1152,47 @@ func (x *PeerStatus) SetAllowedIps(v []string) {
 
 func (x *PeerStatus) SetLastHandshakeUnix(v int64) {
 	x.xxx_hidden_LastHandshakeUnix = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 14)
 }
 
 func (x *PeerStatus) SetTransferRxBytes(v uint64) {
 	x.xxx_hidden_TransferRxBytes = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 14)
 }
 
 func (x *PeerStatus) SetTransferTxBytes(v uint64) {
 	x.xxx_hidden_TransferTxBytes = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 14)
 }
 
 func (x *PeerStatus) SetPersistentKeepaliveSec(v uint32) {
 	x.xxx_hidden_PersistentKeepaliveSec = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 14)
 }
 
 func (x *PeerStatus) SetConfirmedCarrierPayload(v uint32) {
 	x.xxx_hidden_ConfirmedCarrierPayload = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 14)
 }
 
 func (x *PeerStatus) SetPmtuSearching(v bool) {
 	x.xxx_hidden_PmtuSearching = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 14)
 }
 
 func (x *PeerStatus) SetDataReady(v bool) {
 	x.xxx_hidden_DataReady = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 14)
 }
 
 func (x *PeerStatus) SetControlPathState(v string) {
 	x.xxx_hidden_ControlPathState = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 14)
 }
 
 func (x *PeerStatus) SetControlPathError(v string) {
 	x.xxx_hidden_ControlPathError = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 14)
 }
 
 func (x *PeerStatus) SetPresharedKey(v []byte) {
@@ -1154,7 +1200,12 @@ func (x *PeerStatus) SetPresharedKey(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_PresharedKey = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 13)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 14)
+}
+
+func (x *PeerStatus) SetMetricsId(v string) {
+	x.xxx_hidden_MetricsId = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 14)
 }
 
 func (x *PeerStatus) HasPublicKey() bool {
@@ -1241,6 +1292,13 @@ func (x *PeerStatus) HasPresharedKey() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 12)
 }
 
+func (x *PeerStatus) HasMetricsId() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 13)
+}
+
 func (x *PeerStatus) ClearPublicKey() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_PublicKey = nil
@@ -1301,6 +1359,11 @@ func (x *PeerStatus) ClearPresharedKey() {
 	x.xxx_hidden_PresharedKey = nil
 }
 
+func (x *PeerStatus) ClearMetricsId() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 13)
+	x.xxx_hidden_MetricsId = nil
+}
+
 type PeerStatus_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -1325,6 +1388,9 @@ type PeerStatus_builder struct {
 	// Present only on the owner-controlled local socket so set/showconf can
 	// preserve a configured key; the normal show renderer does not print it.
 	PresharedKey []byte
+	// The explicitly configured metrics identifier, if any. It is included so
+	// showconf and config updates preserve WGFPeerID exactly.
+	MetricsId *string
 }
 
 func (b0 PeerStatus_builder) Build() *PeerStatus {
@@ -1332,53 +1398,57 @@ func (b0 PeerStatus_builder) Build() *PeerStatus {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.PublicKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 14)
 		x.xxx_hidden_PublicKey = b.PublicKey
 	}
 	if b.Endpoint != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 14)
 		x.xxx_hidden_Endpoint = b.Endpoint
 	}
 	x.xxx_hidden_AllowedIps = b.AllowedIps
 	if b.LastHandshakeUnix != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 14)
 		x.xxx_hidden_LastHandshakeUnix = *b.LastHandshakeUnix
 	}
 	if b.TransferRxBytes != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 14)
 		x.xxx_hidden_TransferRxBytes = *b.TransferRxBytes
 	}
 	if b.TransferTxBytes != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 14)
 		x.xxx_hidden_TransferTxBytes = *b.TransferTxBytes
 	}
 	if b.PersistentKeepaliveSec != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 14)
 		x.xxx_hidden_PersistentKeepaliveSec = *b.PersistentKeepaliveSec
 	}
 	if b.ConfirmedCarrierPayload != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 14)
 		x.xxx_hidden_ConfirmedCarrierPayload = *b.ConfirmedCarrierPayload
 	}
 	if b.PmtuSearching != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 14)
 		x.xxx_hidden_PmtuSearching = *b.PmtuSearching
 	}
 	if b.DataReady != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 14)
 		x.xxx_hidden_DataReady = *b.DataReady
 	}
 	if b.ControlPathState != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 14)
 		x.xxx_hidden_ControlPathState = b.ControlPathState
 	}
 	if b.ControlPathError != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 14)
 		x.xxx_hidden_ControlPathError = b.ControlPathError
 	}
 	if b.PresharedKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 13)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 14)
 		x.xxx_hidden_PresharedKey = b.PresharedKey
+	}
+	if b.MetricsId != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 14)
+		x.xxx_hidden_MetricsId = b.MetricsId
 	}
 	return m0
 }
@@ -2039,7 +2109,7 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\fR\trequestId\x12/\n" +
 	"\x13expected_generation\x18\x02 \x01(\x04R\x12expectedGeneration\x124\n" +
-	"\x05peers\x18\x03 \x03(\v2\x1e.wgf.controlapi.v1.DesiredPeerR\x05peers\"\xa1\x02\n" +
+	"\x05peers\x18\x03 \x03(\v2\x1e.wgf.controlapi.v1.DesiredPeerR\x05peers\"\xc0\x02\n" +
 	"\vDesiredPeer\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\tR\tpublicKey\x12\x1a\n" +
@@ -2048,7 +2118,9 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"allowedIps\x128\n" +
 	"\x18persistent_keepalive_sec\x18\x04 \x01(\rR\x16persistentKeepaliveSec\x12#\n" +
 	"\rpreshared_key\x18\x05 \x01(\fR\fpresharedKey\x12W\n" +
-	"\x14preshared_key_action\x18\x06 \x01(\x0e2%.wgf.controlapi.v1.PresharedKeyActionR\x12presharedKeyAction\"n\n" +
+	"\x14preshared_key_action\x18\x06 \x01(\x0e2%.wgf.controlapi.v1.PresharedKeyActionR\x12presharedKeyAction\x12\x1d\n" +
+	"\n" +
+	"metrics_id\x18\a \x01(\tR\tmetricsId\"n\n" +
 	"\x13ApplyConfigResponse\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x01 \x01(\x04R\n" +
@@ -2070,7 +2142,7 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"\x05peers\x18\a \x03(\v2\x1d.wgf.controlapi.v1.PeerStatusR\x05peers\x12\x1e\n" +
 	"\n" +
 	"generation\x18\t \x01(\x04R\n" +
-	"generationJ\x04\b\x05\x10\x06J\x04\b\b\x10\t\"\xad\x04\n" +
+	"generationJ\x04\b\x05\x10\x06J\x04\b\b\x10\t\"\xcc\x04\n" +
 	"\n" +
 	"PeerStatus\x12\x1d\n" +
 	"\n" +
@@ -2089,7 +2161,9 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	" \x01(\bR\tdataReady\x12,\n" +
 	"\x12control_path_state\x18\v \x01(\tR\x10controlPathState\x12,\n" +
 	"\x12control_path_error\x18\f \x01(\tR\x10controlPathError\x12#\n" +
-	"\rpreshared_key\x18\r \x01(\fR\fpresharedKey\"\xe7\a\n" +
+	"\rpreshared_key\x18\r \x01(\fR\fpresharedKey\x12\x1d\n" +
+	"\n" +
+	"metrics_id\x18\x0e \x01(\tR\tmetricsId\"\xe7\a\n" +
 	"\fShimCounters\x12\x1f\n" +
 	"\vtx_carriers\x18\x01 \x01(\x04R\n" +
 	"txCarriers\x12&\n" +

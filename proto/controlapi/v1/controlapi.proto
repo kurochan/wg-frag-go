@@ -39,6 +39,9 @@ message DesiredPeer {
   // or cleared during a peer-set update.
   bytes preshared_key = 5;
   PresharedKeyAction preshared_key_action = 6;
+  // Optional stable identifier exposed only in metrics labels. An empty value
+  // selects the deterministic public-key-derived identifier.
+  string metrics_id = 7;
 }
 
 enum PresharedKeyAction {
@@ -96,6 +99,9 @@ message PeerStatus {
   // Present only on the owner-controlled local socket so set/showconf can
   // preserve a configured key; the normal show renderer does not print it.
   bytes preshared_key = 13;
+  // The explicitly configured metrics identifier, if any. It is included so
+  // showconf and config updates preserve WGFPeerID exactly.
+  string metrics_id = 14;
 }
 
 message ShimCounters {

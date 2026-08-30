@@ -30,6 +30,7 @@ var (
 type PeerPlan struct {
 	ID                  peerroute.PeerID
 	PublicKey           [32]byte
+	MetricsID           string
 	PresharedKey        *[32]byte
 	PresharedKeyChanged bool
 	Carrier             netip.Addr
@@ -98,6 +99,7 @@ func PreparePeers(cfg *config.Config) (Plan, error) {
 		plan.Peers[i] = PeerPlan{
 			ID:                  id,
 			PublicKey:           peer.PublicKey,
+			MetricsID:           config.MetricsPeerID(peer),
 			PresharedKey:        cloneKey(peer.PresharedKey),
 			Carrier:             addresses[i+1],
 			AllowedIPs:          append([]netip.Prefix(nil), peer.AllowedIPs...),

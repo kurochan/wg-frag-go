@@ -37,6 +37,8 @@ type fakeTUN struct {
 	receiver  datapath.ReceiverConfig
 	installs  int
 	enableSet int
+	pmtu      uint32
+	searching bool
 }
 
 type orderedTUN struct {
@@ -92,6 +94,13 @@ func (t *fakeTUN) SetDataEnabled(_ peerroute.PeerID, enabled bool) error {
 	defer t.mu.Unlock()
 	t.enabled = enabled
 	t.enableSet++
+	return nil
+}
+
+func (t *fakeTUN) SetPeerPMTUState(_ peerroute.PeerID, _ [32]byte, carrierPayload uint32, searching bool) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.pmtu, t.searching = carrierPayload, searching
 	return nil
 }
 
