@@ -8,6 +8,7 @@ import (
 )
 
 func TestAsymmetricMTUReachesReady(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{}
 	newEngineMTU := func(mtu uint32, epoch uint64) *Engine {
 		engine, err := New(Config{State: controlstate.Config{

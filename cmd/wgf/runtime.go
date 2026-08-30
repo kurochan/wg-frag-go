@@ -128,7 +128,6 @@ type daemonRuntime struct {
 	wg         *device.Device
 	bind       socketDropReporter
 	sink       *controlSink
-	engines    map[peerroute.PeerID]*controlplane.Engine
 	bridges    map[peerroute.PeerID]*controlbridge.Bridge
 
 	generation uint64
@@ -137,6 +136,21 @@ type daemonRuntime struct {
 	logger     *slog.Logger
 	batchSize  int
 	fatal      error
+}
+
+func (rt *daemonRuntime) bridgeSnapshots() map[peerroute.PeerID]controlbridge.Snapshot {
+	rt.mu.Lock()
+	bridges := make(map[peerroute.PeerID]*controlbridge.Bridge, len(rt.bridges))
+	for id, bridge := range rt.bridges {
+		bridges[id] = bridge
+	}
+	rt.mu.Unlock()
+
+	snapshots := make(map[peerroute.PeerID]controlbridge.Snapshot, len(bridges))
+	for id, bridge := range bridges {
+		snapshots[id] = bridge.Snapshot()
+	}
+	return snapshots
 }
 
 func (rt *daemonRuntime) tick(now time.Time) error {
@@ -309,16 +323,31 @@ func peerIDsForEndpoint(plan wgadapter.Plan, uapi string, endpoint netip.AddrPor
 // status is the GetStatus handler.
 func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*controlapiv1.GetStatusResponse, error) {
 	rt.mu.Lock()
-	defer rt.mu.Unlock()
 	if rt.fatal != nil {
-		return nil, rt.fatal
+		err := rt.fatal
+		rt.mu.Unlock()
+		return nil, err
 	}
+	ifname := rt.ifname
+	cfg := *rt.cfg
+	plan := rt.plan
+	generation := rt.generation
+	bridges := make(map[peerroute.PeerID]*controlbridge.Bridge, len(rt.bridges))
+	for id, bridge := range rt.bridges {
+		bridges[id] = bridge
+	}
+	rt.mu.Unlock()
+
 	stats := rt.shim.Stats()
 	dropsV4, dropsV6 := rt.bind.SocketDrops()
-	indexByHexKey := make(map[string]int, len(rt.plan.Peers))
+	indexByHexKey := make(map[string]int, len(plan.Peers))
+	metricsIDs := make(map[config.Key]string, len(cfg.Peers))
+	for _, configured := range cfg.Peers {
+		metricsIDs[configured.PublicKey] = configured.MetricsID
+	}
 
-	peers := make([]*controlapiv1.PeerStatus, len(rt.plan.Peers))
-	for i, peer := range rt.plan.Peers {
+	peers := make([]*controlapiv1.PeerStatus, len(plan.Peers))
+	for i, peer := range plan.Peers {
 		indexByHexKey[hex.EncodeToString(peer.PublicKey[:])] = i
 
 		allowed := make([]string, len(peer.AllowedIPs))
@@ -333,12 +362,14 @@ func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*contro
 		status.SetEndpoint(peer.Endpoint)
 		status.SetAllowedIps(allowed)
 		status.SetPersistentKeepaliveSec(uint32(peer.PersistentKeepalive))
-		if engine := rt.engines[peer.ID]; engine != nil {
-			status.SetConfirmedCarrierPayload(engine.ConfirmedCarrierPayload())
-			status.SetPmtuSearching(engine.PMTUSearching())
-			status.SetDataReady(engine.MissingFlags() == 0)
-			status.SetControlPathState(string(engine.Status()))
-			status.SetControlPathError(engine.StatusReason())
+		status.SetMetricsId(metricsIDs[config.Key(peer.PublicKey)])
+		if bridge := bridges[peer.ID]; bridge != nil {
+			snapshot := bridge.Snapshot()
+			status.SetConfirmedCarrierPayload(snapshot.CarrierPayload)
+			status.SetPmtuSearching(snapshot.PMTUSearching)
+			status.SetDataReady(snapshot.DataReady)
+			status.SetControlPathState(string(snapshot.Status))
+			status.SetControlPathError(snapshot.StatusReason)
 		}
 		peers[i] = status
 	}
@@ -364,12 +395,12 @@ func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*contro
 	counters.SetReassemblyExpirations(stats.ReassemblyExpirations)
 	counters.SetUdpSocketDrops(dropsV4 + dropsV6)
 	response := controlapiv1.GetStatusResponse_builder{}.Build()
-	response.SetInterfaceName(rt.ifname)
-	response.SetPublicKey(base64.StdEncoding.EncodeToString(rt.plan.LocalPublicKey[:]))
-	response.SetListenPort(uint32(rt.cfg.Interface.ListenPort))
-	response.SetMtu(uint32(rt.cfg.Interface.MTU))
+	response.SetInterfaceName(ifname)
+	response.SetPublicKey(base64.StdEncoding.EncodeToString(plan.LocalPublicKey[:]))
+	response.SetListenPort(uint32(cfg.Interface.ListenPort))
+	response.SetMtu(uint32(cfg.Interface.MTU))
 	response.SetPeers(peers)
-	response.SetGeneration(rt.generation)
+	response.SetGeneration(generation)
 	response.SetCounters(counters)
 	rt.fillWireGuardCounters(indexByHexKey, peers)
 	return response, nil
@@ -470,6 +501,10 @@ func (rt *daemonRuntime) apply(
 		if err != nil {
 			return nil, fmt.Errorf("peer %d: %w", i+1, err)
 		}
+		desired[i].MetricsID = peer.GetMetricsId()
+	}
+	if err := config.ValidatePeers(desired); err != nil {
+		return nil, err
 	}
 
 	newCfg := *rt.cfg
@@ -544,7 +579,6 @@ func (rt *daemonRuntime) apply(
 	for _, peer := range update.Removed {
 		rt.sink.remove(peer.ID)
 		delete(rt.bridges, peer.ID)
-		delete(rt.engines, peer.ID)
 		delete(rt.peerFaults, peer.ID)
 	}
 
@@ -557,6 +591,7 @@ func (rt *daemonRuntime) apply(
 			Engine:       engine,
 			TUN:          rt.shim,
 			PeerID:       peer.ID,
+			OwnerKey:     peer.PublicKey,
 			SenderBase:   base.Sender,
 			ReceiverBase: base.Receiver,
 			Logger:       peerLogger(rt.logger, peer),
@@ -567,7 +602,6 @@ func (rt *daemonRuntime) apply(
 		if err := bridge.Start(); err != nil {
 			return err
 		}
-		rt.engines[peer.ID] = engine
 		rt.bridges[peer.ID] = bridge
 		rt.sink.set(peer.ID, bridge)
 		return nil
@@ -588,15 +622,17 @@ func (rt *daemonRuntime) apply(
 	}
 
 	for _, peer := range update.Survivors {
+		if err := rt.shim.SetPeerMetricsID(peer.ID, peer.PublicKey, peer.MetricsID); err != nil {
+			return nil, rt.failClosed(fmt.Errorf("update peer metrics ID: %w", err))
+		}
 		result := controlapiv1.PeerResult_builder{}.Build()
 		result.SetPublicKey(base64.StdEncoding.EncodeToString(peer.PublicKey[:]))
 		// A previous ApplyConfig may have installed the peer in the shim and
 		// UAPI but failed while starting its control bridge. Retry that cold
 		// path on the next snapshot instead of leaving the peer dark forever.
-		if rt.engines[peer.ID] == nil || rt.bridges[peer.ID] == nil {
+		if rt.bridges[peer.ID] == nil {
 			rt.sink.remove(peer.ID)
 			delete(rt.bridges, peer.ID)
-			delete(rt.engines, peer.ID)
 			base, err := peerDataPlane(&newCfg, update.Plan, peer, rt.classifier)
 			if err == nil {
 				err = startPeer(peer, base)
@@ -733,6 +769,8 @@ func peerDataPlane(
 		return shimtun.PeerConfig{}, errors.New("peer reassembly slots exceed interface slots")
 	}
 	return shimtun.PeerConfig{
+		MetricsID: peer.MetricsID,
+		OwnerKey:  peer.PublicKey,
 		Sender: datapath.SenderConfig{
 			DataSessionID:  1, // Replaced by Bridge after ResetSequence.
 			CarrierPayload: cfg.Interface.MinCarrierPayload,

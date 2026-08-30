@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kurochan/wg-frag-go/internal/controlplane"
+	controlstate "github.com/kurochan/wg-frag-go/internal/core/control/state"
 	"github.com/kurochan/wg-frag-go/internal/core/datapath"
 	"github.com/kurochan/wg-frag-go/internal/core/peerroute"
 )
@@ -28,6 +29,18 @@ type TUN interface {
 	EnqueueControl(peer peerroute.PeerID, frame []byte) error
 	InstallDataPlane(peer peerroute.PeerID, sender datapath.SenderConfig, receiver datapath.ReceiverConfig) error
 	SetDataEnabled(peer peerroute.PeerID, enabled bool) error
+	SetPeerPMTUState(peer peerroute.PeerID, ownerKey [32]byte, carrierPayload uint32, searching bool) error
+}
+
+// Snapshot is a consistent, read-only view of one peer's CONTROL state.
+// Bridge owns the Engine lock required to produce it.
+type Snapshot struct {
+	CarrierPayload uint32
+	PMTUSearching  bool
+	DataReady      bool
+	MissingFlags   controlstate.Flags
+	Status         controlplane.Status
+	StatusReason   string
 }
 
 // Config binds one CONTROL engine to one peer's preallocated TUN shim. The
@@ -37,6 +50,7 @@ type Config struct {
 	Engine       *controlplane.Engine
 	TUN          TUN
 	PeerID       peerroute.PeerID
+	OwnerKey     [32]byte
 	SenderBase   datapath.SenderConfig
 	ReceiverBase datapath.ReceiverConfig
 	// Logger receives low-frequency control and data-plane state transitions.
@@ -51,6 +65,7 @@ type Bridge struct {
 	engine           *controlplane.Engine
 	tun              TUN
 	peerID           peerroute.PeerID
+	ownerKey         [32]byte
 	senderBase       datapath.SenderConfig
 	receiverBase     datapath.ReceiverConfig
 	started          bool
@@ -79,6 +94,7 @@ func New(config Config) (*Bridge, error) {
 		engine:       config.Engine,
 		tun:          config.TUN,
 		peerID:       config.PeerID,
+		ownerKey:     config.OwnerKey,
 		senderBase:   config.SenderBase,
 		receiverBase: config.ReceiverBase,
 		logger:       config.Logger,
@@ -128,6 +144,13 @@ func (b *Bridge) UpdateRoutes(routes *peerroute.Snapshot) {
 	b.senderBase.AllowedIPs = routes
 	b.receiverBase.AllowedIPs = routes
 	b.mu.Unlock()
+}
+
+// Snapshot returns a state view safe for diagnostics and management APIs.
+func (b *Bridge) Snapshot() Snapshot {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.snapshotLocked()
 }
 
 // DeliverControl implements shimtun.ControlSink. It is safe for wireguard-go
@@ -198,6 +221,11 @@ func (b *Bridge) markStartedLocked() {
 }
 
 func (b *Bridge) applyLocked(outbound []controlplane.Outbound) error {
+	defer func() {
+		// Observability must never make a peer unavailable. The owner key stops
+		// a stale callback from updating a peer that reused this slot.
+		_ = b.tun.SetPeerPMTUState(b.peerID, b.ownerKey, b.engine.ConfirmedCarrierPayload(), b.engine.PMTUSearching())
+	}()
 	dataAllowed := b.engine.DataSendAllowed()
 	if !dataAllowed {
 		if b.engine.Status() == controlplane.StatusError && !b.errorAnnounced {
@@ -292,6 +320,17 @@ func (b *Bridge) applyLocked(outbound []controlplane.Outbound) error {
 	b.announced = true
 	b.announcedPayload = payload
 	return nil
+}
+
+func (b *Bridge) snapshotLocked() Snapshot {
+	return Snapshot{
+		CarrierPayload: b.engine.ConfirmedCarrierPayload(),
+		PMTUSearching:  b.engine.PMTUSearching(),
+		DataReady:      b.engine.MissingFlags() == 0,
+		MissingFlags:   b.engine.MissingFlags(),
+		Status:         b.engine.Status(),
+		StatusReason:   b.engine.StatusReason(),
+	}
 }
 
 func (b *Bridge) log(level slog.Level, message string, args ...any) {

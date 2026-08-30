@@ -9,6 +9,7 @@ import (
 )
 
 func TestRateLimitedLogfSuppressesRepeatedMessages(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	clock := time.Unix(1, 0)
 	logger := newRateLimitedLogf(slog.New(slog.NewTextHandler(&output, nil)), slog.LevelError, time.Second)

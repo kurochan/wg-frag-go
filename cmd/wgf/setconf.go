@@ -199,6 +199,7 @@ func desiredFromConfig(peers []config.Peer, clearMissingPSK bool) []*controlapiv
 		desired[i].SetEndpoint(peer.Endpoint)
 		desired[i].SetAllowedIps(allowed)
 		desired[i].SetPersistentKeepaliveSec(uint32(peer.PersistentKeepalive))
+		desired[i].SetMetricsId(peer.MetricsID)
 		if peer.PresharedKey != nil {
 			desired[i].SetPresharedKey(peer.PresharedKey[:])
 			desired[i].SetPresharedKeyAction(controlapiv1.PresharedKeyAction_SET)
@@ -217,6 +218,7 @@ func desiredFromStatus(peers []*controlapiv1.PeerStatus) []*controlapiv1.Desired
 		desired[i].SetEndpoint(peer.GetEndpoint())
 		desired[i].SetAllowedIps(peer.GetAllowedIps())
 		desired[i].SetPersistentKeepaliveSec(peer.GetPersistentKeepaliveSec())
+		desired[i].SetMetricsId(peer.GetMetricsId())
 		if peer.HasPresharedKey() {
 			desired[i].SetPresharedKey(peer.GetPresharedKey())
 			desired[i].SetPresharedKeyAction(controlapiv1.PresharedKeyAction_SET)
@@ -234,6 +236,9 @@ func mergePeers(base, additions []*controlapiv1.DesiredPeer) []*controlapiv1.Des
 
 		for i, peer := range merged {
 			if peer.GetPublicKey() == addition.GetPublicKey() {
+				if addition.GetMetricsId() == "" && peer.GetMetricsId() != "" {
+					addition.SetMetricsId(peer.GetMetricsId())
+				}
 				merged[i] = addition
 				replaced = true
 

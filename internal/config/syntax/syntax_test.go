@@ -6,6 +6,7 @@ import (
 )
 
 func TestScanSharesCommentAndFieldRules(t *testing.T) {
+	t.Parallel()
 	var lines []Line
 	err := Scan(strings.NewReader("; c\n[Interface] # section\nHook = echo # keep\n[Peer]\nAllowedIPs = 10.0.0.0/24 ; comment\n"), func(line Line) error {
 		lines = append(lines, line)
@@ -26,6 +27,7 @@ func TestScanSharesCommentAndFieldRules(t *testing.T) {
 }
 
 func TestSectionNormalizesCommentsAndSpacing(t *testing.T) {
+	t.Parallel()
 	for input, want := range map[string]string{
 		"[Interface] # comment": "Interface",
 		"[ Peer ] ; comment":    "Peer",

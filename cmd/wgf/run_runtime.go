@@ -16,7 +16,6 @@ import (
 
 	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/controlapi"
-	"github.com/kurochan/wg-frag-go/internal/controlplane"
 	"github.com/kurochan/wg-frag-go/internal/core/lane"
 	"github.com/kurochan/wg-frag-go/internal/core/peerroute"
 	"github.com/kurochan/wg-frag-go/internal/transport"
@@ -167,7 +166,6 @@ func runDaemon(
 	if err != nil {
 		return err
 	}
-	engines := make(map[peerroute.PeerID]*controlplane.Engine, len(plan.Peers))
 	bridges := make(map[peerroute.PeerID]*controlbridge.Bridge, len(plan.Peers))
 	for i, peer := range plan.Peers {
 		engine, err := newEngine(cfg)
@@ -175,13 +173,13 @@ func runDaemon(
 			return err
 		}
 		bridge, err := controlbridge.New(controlbridge.Config{
-			Engine: engine, TUN: shim, PeerID: peer.ID, SenderBase: peerConfigs[i].Sender,
+			Engine: engine, TUN: shim, PeerID: peer.ID, OwnerKey: peer.PublicKey, SenderBase: peerConfigs[i].Sender,
 			ReceiverBase: peerConfigs[i].Receiver, Logger: peerLogger(logger, peer),
 		})
 		if err != nil {
 			return err
 		}
-		engines[peer.ID], bridges[peer.ID] = engine, bridge
+		bridges[peer.ID] = bridge
 		sink.set(peer.ID, bridge)
 	}
 
@@ -215,8 +213,29 @@ func runDaemon(
 	}
 	rt := &daemonRuntime{
 		ifname: ifname, classifier: classifier, cfg: cfg, plan: plan, shim: shim, wgTUN: wgTUN, wg: wg,
-		bind: bind, sink: sink, engines: engines, bridges: bridges, requests: make(map[[16]byte]appliedRequest),
+		bind: bind, sink: sink, bridges: bridges, requests: make(map[[16]byte]appliedRequest),
 		peerFaults: make(map[peerroute.PeerID]peerFaultState), logger: logger, batchSize: native.BatchSize(),
+	}
+	var metricsListener *metricsServer
+	if cfg.Interface.Metrics {
+		uapi, metricsErr := wg.IpcGet()
+		if metricsErr == nil {
+			var port uint16
+			port, metricsErr = effectiveListenPort(uapi)
+			if metricsErr == nil {
+				metricsListener, metricsErr = startMetricsServer(cfg.Interface, port, logger, rt.metricsSnapshot)
+			}
+		}
+		if metricsErr != nil {
+			logger.Warn("metrics disabled", "error", metricsErr)
+		} else {
+			defer func() {
+				if closeErr := metricsListener.Close(); closeErr != nil {
+					logger.Warn("metrics listener shutdown failed", "error", closeErr)
+				}
+				logger.Info("metrics listener stopped")
+			}()
+		}
 	}
 	api, err := controlapi.New(controlapi.Config{SocketPath: controlSocket, Status: rt.status, Apply: rt.apply})
 	if err != nil {
@@ -241,19 +260,24 @@ func runDaemon(
 		case received := <-signals:
 			if received == syscall.SIGUSR1 {
 				dropsV4, dropsV6 := bind.SocketDrops()
-				logger.Info("runtime stats", "shim", shim.Stats(), "udp_drops_v4", dropsV4, "udp_drops_v6", dropsV6)
-				rt.mu.Lock()
-				for id, engine := range rt.engines {
+				stats := shim.Stats()
+				logger.Info("runtime stats", "shim", stats, "udp_drops_v4", dropsV4, "udp_drops_v6", dropsV6)
+				peerStats := make(map[peerroute.PeerID]shimtun.PeerStats, len(plan.Peers))
+				for _, peer := range shim.PeerStats() {
+					peerStats[peer.ID] = peer
+				}
+				for id, snapshot := range rt.bridgeSnapshots() {
+					peer := peerStats[id]
 					logger.Info("peer stats",
 						"peer_id", id,
-						"confirmed_carrier_payload", engine.ConfirmedCarrierPayload(),
-						"pmtu_searching", engine.PMTUSearching(),
-						"missing_flags", fmt.Sprintf("%07b", engine.MissingFlags()),
-						"control_path_state", engine.Status(),
-						"control_path_error", engine.StatusReason(),
+						"confirmed_carrier_payload", snapshot.CarrierPayload,
+						"pmtu_searching", snapshot.PMTUSearching,
+						"missing_flags", fmt.Sprintf("%07b", snapshot.MissingFlags),
+						"control_path_state", snapshot.Status,
+						"control_path_error", snapshot.StatusReason,
+						"data_forwarding_enabled", peer.DataForwardingEnabled,
 					)
 				}
-				rt.mu.Unlock()
 				continue
 			}
 			logger.Info("shutdown requested", "signal", received.String())

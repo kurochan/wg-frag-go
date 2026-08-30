@@ -30,6 +30,35 @@ func TestDesiredFromConfigPreservesExplicitEmptyAndZeroFields(t *testing.T) {
 	}
 }
 
+func TestDesiredPeerMetricsIDRoundTrips(t *testing.T) {
+	t.Parallel()
+	configured := desiredFromConfig([]config.Peer{{MetricsID: "edge-a"}}, true)
+	if got := configured[0].GetMetricsId(); got != "edge-a" {
+		t.Fatalf("configured metrics ID = %q", got)
+	}
+	status := controlapiv1.PeerStatus_builder{}.Build()
+	status.SetMetricsId("edge-b")
+	running := desiredFromStatus([]*controlapiv1.PeerStatus{status})
+	if got := running[0].GetMetricsId(); got != "edge-b" {
+		t.Fatalf("running metrics ID = %q", got)
+	}
+}
+
+func TestMergePeersPreservesExistingMetricsID(t *testing.T) {
+	t.Parallel()
+	base := controlapiv1.DesiredPeer_builder{}.Build()
+	base.SetPublicKey("AAA=")
+	base.SetMetricsId("edge-a")
+	addition := controlapiv1.DesiredPeer_builder{}.Build()
+	addition.SetPublicKey("AAA=")
+	addition.SetEndpoint("192.0.2.1:51820")
+
+	merged := mergePeers([]*controlapiv1.DesiredPeer{base}, []*controlapiv1.DesiredPeer{addition})
+	if got := merged[0].GetMetricsId(); got != "edge-a" {
+		t.Fatalf("merged metrics ID = %q, want edge-a", got)
+	}
+}
+
 func TestApplyPeerEdits(t *testing.T) {
 	t.Parallel()
 	current := []*controlapiv1.DesiredPeer{

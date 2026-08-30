@@ -29,9 +29,12 @@ func twoPeerConfig(t *testing.T, native *fakeTUN) Config {
 		t.Fatal(err)
 	}
 	peers := make([]PeerConfig, 2)
+	metricsIDs := []string{"peer-a", "peer-b"}
 	for i := range peers {
 		id := peerroute.PeerID(i)
 		peers[i] = PeerConfig{
+			MetricsID: metricsIDs[i],
+			OwnerKey:  [32]byte{byte(i + 1)},
 			Sender: datapath.SenderConfig{
 				DataSessionID:  1,
 				CarrierSource:  local,
@@ -102,6 +105,58 @@ func TestEgressSelectsPeerByLongestPrefixMatch(t *testing.T) {
 		t.Fatalf("Stats() = %+v, want the unrouted packet counted", stats)
 	}
 	_ = sizes
+}
+
+func TestStatsIncludesPeerPMTUState(t *testing.T) {
+	t.Parallel()
+	d, err := New(twoPeerConfig(t, newFakeTUN("a", 1500)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if err := d.SetPeerPMTUState(1, [32]byte{2}, 1400, true); err != nil {
+		t.Fatal(err)
+	}
+	stats := d.PeerStats()
+	if len(stats) != 2 {
+		t.Fatalf("PeerStats() = %#v, want two peers", stats)
+	}
+	if got := stats[1]; got.ID != 1 || got.MetricsID != "peer-b" || got.CarrierPayload != 1400 || !got.PMTUSearching || !got.DataForwardingEnabled {
+		t.Fatalf("PeerStats()[1] = %#v", got)
+	}
+	if err := d.SetPeerPMTUState(2, [32]byte{}, 0, false); !errors.Is(err, ErrPeerNotFound) {
+		t.Fatalf("SetPeerPMTUState unknown = %v, want ErrPeerNotFound", err)
+	}
+	if err := d.SetPeerPMTUState(peerroute.PeerID(^uint32(0)), [32]byte{}, 0, false); !errors.Is(err, ErrPeerNotFound) {
+		t.Fatalf("SetPeerPMTUState maximum ID = %v, want ErrPeerNotFound", err)
+	}
+}
+
+func TestStalePeerStateCannotUpdateReplacement(t *testing.T) {
+	t.Parallel()
+	config := twoPeerConfig(t, newFakeTUN("a", 1500))
+	d, err := New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	replacement := config.Peers[1]
+	replacement.MetricsID = "replacement"
+	replacement.OwnerKey = [32]byte{9}
+	if err := d.Reconfigure(map[peerroute.PeerID]PeerConfig{1: replacement}, []peerroute.PeerID{1}, config.Peers[0].Sender.AllowedIPs); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetPeerPMTUState(1, config.Peers[1].OwnerKey, 1400, true); !errors.Is(err, ErrPeerNotFound) {
+		t.Fatalf("stale SetPeerPMTUState = %v, want ErrPeerNotFound", err)
+	}
+	if err := d.SetPeerMetricsID(1, config.Peers[1].OwnerKey, "stale"); !errors.Is(err, ErrPeerNotFound) {
+		t.Fatalf("stale SetPeerMetricsID = %v, want ErrPeerNotFound", err)
+	}
+	stats := d.PeerStats()
+	if got := stats[1]; got.MetricsID != "replacement" || got.CarrierPayload != 0 || got.PMTUSearching {
+		t.Fatalf("replacement peer state = %#v", got)
+	}
 }
 
 func TestEgressWithOverlappingPrefixesPrefersMoreSpecificPeer(t *testing.T) {

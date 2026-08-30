@@ -36,7 +36,7 @@ func TestParseDefaults(t *testing.T) {
 		iface.MinCarrierPayload != limits.DefaultCarrierPayload || iface.MaxCarrierPayload != DefaultMaxCarrierPayload ||
 		iface.ReassemblySlots != DefaultReassemblySlots || !iface.PeerReassemblySlots.Auto ||
 		iface.ReassemblyLifetime != 2*time.Second || !iface.Reorder || iface.ReorderMaxDelay != 10*time.Millisecond ||
-		!iface.Workers.Auto || !iface.TUNQueues.Auto || iface.SocketBuffer != DefaultSocketBuffer {
+		!iface.Workers.Auto || !iface.TUNQueues.Auto || iface.SocketBuffer != DefaultSocketBuffer || iface.Metrics || !iface.MetricsListen.Auto {
 		t.Fatalf("defaults = %+v", iface)
 	}
 	if len(iface.Addresses) != 0 || len(config.Peers) != 0 {
@@ -65,6 +65,10 @@ func TestParseAllFieldsAndRepeatedLists(t *testing.T) {
         WGFWorkers = 4
 		WGFTUNQueues = 2
 		WGFSocketBuffer = 2097152
+        WGFMetrics = on
+        WGFMetricsListen = 127.0.0.1:9910,[::1]:9910
+        WGFMetricsInclude = wgf_tx_*,wgf_peer_pmtu_*
+        WGFMetricsExclude = wgf_*_drops_total
 
         [Peer]
         PublicKey = ` + encodedKey(2) + `
@@ -73,6 +77,7 @@ func TestParseAllFieldsAndRepeatedLists(t *testing.T) {
         AllowedIPs = 10.1.0.1/24, ::/0
         AllowedIPs = 192.0.2.9/32
         PersistentKeepalive = 25
+        WGFPeerID = edge-a
 
         [Peer]
         PublicKey = ` + encodedKey(3) + `
@@ -88,10 +93,11 @@ func TestParseAllFieldsAndRepeatedLists(t *testing.T) {
 		iface.MinCarrierPayload != 613 || iface.MaxCarrierPayload != 1400 || iface.ReassemblySlots != 512 ||
 		iface.PeerReassemblySlots != (AutoCount{Count: 64}) || iface.ReassemblyLifetime != 1500*time.Millisecond ||
 		iface.Reorder || iface.ReorderMaxDelay != 20*time.Millisecond || iface.Workers != (AutoCount{Count: 4}) ||
-		iface.TUNQueues != (AutoCount{Count: 2}) || iface.SocketBuffer != 2<<20 {
+		iface.TUNQueues != (AutoCount{Count: 2}) || iface.SocketBuffer != 2<<20 || !iface.Metrics || iface.MetricsListen.Auto ||
+		len(iface.MetricsListen.Addresses) != 2 || len(iface.MetricsInclude) != 2 || len(iface.MetricsExclude) != 1 {
 		t.Fatalf("interface = %+v", iface)
 	}
-	if len(config.Peers) != 2 || len(config.Peers[0].AllowedIPs) != 3 || config.Peers[0].PersistentKeepalive != 25 || config.Peers[1].PersistentKeepalive != 0 || config.Peers[0].PresharedKey == nil || *config.Peers[0].PresharedKey != keyValue(4) {
+	if len(config.Peers) != 2 || len(config.Peers[0].AllowedIPs) != 3 || config.Peers[0].PersistentKeepalive != 25 || config.Peers[1].PersistentKeepalive != 0 || config.Peers[0].PresharedKey == nil || *config.Peers[0].PresharedKey != keyValue(4) || config.Peers[0].MetricsID != "edge-a" {
 		t.Fatalf("peers = %+v", config.Peers)
 	}
 	if got := config.Peers[0].AllowedIPs[0]; got != netip.MustParsePrefix("10.1.0.0/24") {
@@ -125,6 +131,10 @@ func TestParseRejectsInvalidConfigurations(t *testing.T) {
 		{name: "max above IPv6 ceiling", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFMaxCarrierPayload = 65449\n"},
 		{name: "lifetime too short", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFReassemblyLifetime = 99ms\n"},
 		{name: "bad bool", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFReorder = 1\n"},
+		{name: "bad metrics switch", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFMetrics = true\n"},
+		{name: "metrics hostname", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFMetricsListen = localhost:9910\n"},
+		{name: "metrics unmatched selection", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFMetricsInclude = unknown\n"},
+		{name: "metrics two wildcards", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFMetricsInclude = wgf_*_*\n"},
 		{name: "bad auto count", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFWorkers = 0\n"},
 		{name: "auto count overflow", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFWorkers = 18446744073709551615\n"},
 		{name: "socket buffer too small", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFSocketBuffer = 65535\n"},
@@ -136,6 +146,7 @@ func TestParseRejectsInvalidConfigurations(t *testing.T) {
 		{name: "invalid endpoint", input: "[Interface]\nPrivateKey = " + privateKey + "\n[Peer]\nPublicKey = " + publicKey + "\nEndpoint = example.net\n"},
 		{name: "invalid endpoint hostname", input: "[Interface]\nPrivateKey = " + privateKey + "\n[Peer]\nPublicKey = " + publicKey + "\nEndpoint = bad_host:51820\n"},
 		{name: "duplicate peer key", input: "[Interface]\nPrivateKey = " + privateKey + "\n[Peer]\nPublicKey = " + publicKey + "\n[Peer]\nPublicKey = " + publicKey + "\n"},
+		{name: "duplicate metrics peer ID", input: "[Interface]\nPrivateKey = " + privateKey + "\n[Peer]\nPublicKey = " + publicKey + "\nWGFPeerID = edge\n[Peer]\nPublicKey = " + encodedKey(3) + "\nWGFPeerID = edge\n"},
 	}
 
 	for _, tt := range tests {
@@ -144,6 +155,58 @@ func TestParseRejectsInvalidConfigurations(t *testing.T) {
 				t.Fatalf("Parse() error = %v, want ErrInvalidConfig", err)
 			}
 		})
+	}
+}
+
+func TestMetricsPeerID(t *testing.T) {
+	t.Parallel()
+	peer := Peer{PublicKey: keyValue(2)}
+	first := MetricsPeerID(peer)
+	if first != MetricsPeerID(peer) || len(first) != 16 {
+		t.Fatalf("MetricsPeerID = %q", first)
+	}
+	for _, char := range first {
+		if (char < 'a' || char > 'z') && (char < '2' || char > '7') {
+			t.Fatalf("MetricsPeerID contains %q", char)
+		}
+	}
+	peer.MetricsID = "edge-a"
+	if got := MetricsPeerID(peer); got != "edge-a" {
+		t.Fatalf("MetricsPeerID explicit = %q", got)
+	}
+}
+
+func TestParseEmptyMetricSelection(t *testing.T) {
+	t.Parallel()
+	input := "[Interface]\nPrivateKey = " + encodedKey(1) + "\nWGFMetricsInclude =\nWGFMetricsExclude =\n"
+	parsed, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Interface.MetricsInclude) != 0 || len(parsed.Interface.MetricsExclude) != 0 {
+		t.Fatalf("metric selections = %#v, %#v", parsed.Interface.MetricsInclude, parsed.Interface.MetricsExclude)
+	}
+}
+
+func TestParseRejectsExplicitMetricsIDCollidingWithDerivedID(t *testing.T) {
+	t.Parallel()
+	derivedPeer := Peer{PublicKey: keyValue(3)}
+	input := "[Interface]\nPrivateKey = " + encodedKey(1) + "\n[Peer]\nPublicKey = " + encodedKey(2) +
+		"\nWGFPeerID = " + MetricsPeerID(derivedPeer) + "\n[Peer]\nPublicKey = " + encodedKey(3) + "\n"
+	if _, err := Parse(strings.NewReader(input)); !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("Parse() error = %v, want ErrInvalidConfig", err)
+	}
+}
+
+func TestValidatePeersRejectsRuntimeMetricsIDCollision(t *testing.T) {
+	t.Parallel()
+	peers := []Peer{{PublicKey: keyValue(2), MetricsID: "edge"}, {PublicKey: keyValue(3), MetricsID: "edge"}}
+	if err := ValidatePeers(peers); err == nil {
+		t.Fatal("duplicate runtime WGFPeerID succeeded")
+	}
+	peers[1].MetricsID = "INVALID"
+	if err := ValidatePeers(peers); err == nil {
+		t.Fatal("invalid runtime WGFPeerID succeeded")
 	}
 }
 

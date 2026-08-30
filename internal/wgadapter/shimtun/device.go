@@ -145,8 +145,10 @@ type SessionSink interface {
 // PeerConfig is one peer's initial data plane. Carrier endpoints are from the
 // local perspective in Sender and from the remote perspective in Receiver.
 type PeerConfig struct {
-	Sender   datapath.SenderConfig
-	Receiver datapath.ReceiverConfig
+	Sender    datapath.SenderConfig
+	Receiver  datapath.ReceiverConfig
+	MetricsID string
+	OwnerKey  [32]byte
 }
 
 // Config describes the adapter. Peers are indexed by peerroute.PeerID, which
@@ -203,9 +205,21 @@ type Stats struct {
 	ReassemblyExpirations          uint64
 }
 
+// PeerStats is the point-in-time data-plane state for one peer. Counters that
+// are only available interface-wide intentionally remain in Stats.
+type PeerStats struct {
+	ID                    peerroute.PeerID
+	MetricsID             string
+	CarrierPayload        uint32
+	PMTUSearching         bool
+	DataForwardingEnabled bool
+}
+
 // peerState holds one peer's data plane. RX is serialized by its own rxMu.
 type peerState struct {
 	id              peerroute.PeerID
+	ownerKey        [32]byte
+	metrics         atomic.Pointer[peerMetrics]
 	sender          *datapath.Sender
 	txSession       uint16
 	txDest          netip.Addr
@@ -216,6 +230,8 @@ type peerState struct {
 	controlIngress  tokenBucket
 
 	dataEnabled atomic.Bool
+	pmtuPayload atomic.Uint32
+	pmtuSearch  atomic.Bool
 
 	pendingData  []byte
 	pendingLens  []int
@@ -231,6 +247,10 @@ type peerState struct {
 	deliverStorage []byte
 	deliverBufs    [][]byte
 	deliverCount   int
+}
+
+type peerMetrics struct {
+	id string
 }
 
 // peerTable is the immutable peer set. Readers load it once per operation;
@@ -497,6 +517,7 @@ func New(config Config) (*Device, error) {
 func (d *Device) newPeerState(id peerroute.PeerID, config PeerConfig) (*peerState, error) {
 	peer := &peerState{
 		id:              id,
+		ownerKey:        config.OwnerKey,
 		txSession:       config.Sender.DataSessionID,
 		rxSession:       config.Receiver.DataSessionID,
 		txDest:          config.Sender.CarrierDest,
@@ -509,6 +530,7 @@ func (d *Device) newPeerState(id peerroute.PeerID, config PeerConfig) (*peerStat
 		deliverStorage:  make([]byte, d.batch*(d.nativeWriteOffset+d.innerMTU)),
 		deliverBufs:     make([][]byte, 0, d.batch),
 	}
+	peer.metrics.Store(&peerMetrics{id: config.MetricsID})
 	peer.sink = peerDeliverySink{device: d, peer: peer}
 	var err error
 	if peer.sender, err = datapath.NewPayloadSender(config.Sender, senderQueueSink{device: d}); err != nil {
@@ -2057,7 +2079,8 @@ func (d *Device) Stats() Stats {
 	drops.SourceSpoof = d.retiredSourceSpoofDrops.Load()
 	drops.NativeFragment = d.retiredNativeFragmentDrops.Load()
 	drops.InnerInvalid = d.retiredInnerInvalidDrops.Load()
-	for _, peer := range d.table.Load().peers {
+	table := d.table.Load()
+	for _, peer := range table.peers {
 		if peer == nil {
 			continue
 		}
@@ -2096,6 +2119,62 @@ func (d *Device) Stats() Stats {
 		PreconfirmDrops:                d.preconfirmDrops.Load(),
 		ReassemblyExpirations:          d.reassemblyExpirations.Load(),
 	}
+}
+
+// PeerStats returns each peer's lightweight current state. It does not retain
+// packet data and is independent of the aggregate counter snapshot in Stats.
+func (d *Device) PeerStats() []PeerStats {
+	table := d.table.Load()
+	stats := make([]PeerStats, 0, len(table.peers))
+	for _, peer := range table.peers {
+		if peer == nil {
+			continue
+		}
+		metrics := peer.metrics.Load()
+		metricsID := ""
+		if metrics != nil {
+			metricsID = metrics.id
+		}
+		stats = append(stats, PeerStats{
+			ID:                    peer.id,
+			MetricsID:             metricsID,
+			CarrierPayload:        peer.pmtuPayload.Load(),
+			PMTUSearching:         peer.pmtuSearch.Load(),
+			DataForwardingEnabled: peer.dataEnabled.Load(),
+		})
+	}
+	return stats
+}
+
+// SetPeerPMTUState publishes control-plane PMTU state for observability. It
+// does not participate in packet processing or control decisions.
+func (d *Device) SetPeerPMTUState(id peerroute.PeerID, ownerKey [32]byte, carrierPayload uint32, searching bool) error {
+	table := d.table.Load()
+	if uint64(id) >= uint64(len(table.peers)) || table.peers[int(id)] == nil {
+		return ErrPeerNotFound
+	}
+	peer := table.peers[int(id)]
+	if peer.ownerKey != ownerKey {
+		return ErrPeerNotFound
+	}
+	peer.pmtuPayload.Store(carrierPayload)
+	peer.pmtuSearch.Store(searching)
+	return nil
+}
+
+// SetPeerMetricsID replaces the observability identifier for an existing
+// peer. The owner key prevents a stale peer slot from changing its successor.
+func (d *Device) SetPeerMetricsID(id peerroute.PeerID, ownerKey [32]byte, metricsID string) error {
+	table := d.table.Load()
+	if uint64(id) >= uint64(len(table.peers)) || table.peers[int(id)] == nil {
+		return ErrPeerNotFound
+	}
+	peer := table.peers[int(id)]
+	if peer.ownerKey != ownerKey {
+		return ErrPeerNotFound
+	}
+	peer.metrics.Store(&peerMetrics{id: metricsID})
+	return nil
 }
 
 func (d *Device) Close() error {

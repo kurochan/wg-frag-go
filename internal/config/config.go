@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/kurochan/wg-frag-go/internal/config/syntax"
 	"github.com/kurochan/wg-frag-go/internal/core/limits"
+	"github.com/kurochan/wg-frag-go/internal/metrics"
+	"golang.org/x/crypto/blake2s"
 )
 
 const (
@@ -70,9 +73,20 @@ type Interface struct {
 	Workers             AutoCount
 	TUNQueues           AutoCount
 	SocketBuffer        int
+	Metrics             bool
+	MetricsListen       MetricsListen
+	MetricsInclude      []string
+	MetricsExclude      []string
 	// FwMark is an outer UDP socket mark where the platform supports one; zero
 	// disables it. Linux quick uses it for policy-routing loop avoidance.
 	FwMark uint32
+}
+
+// MetricsListen selects metrics listener addresses. Auto uses both loopback
+// families with the effective WireGuard UDP port.
+type MetricsListen struct {
+	Auto      bool
+	Addresses []string
 }
 
 // Peer contains one [Peer] section.
@@ -82,6 +96,17 @@ type Peer struct {
 	Endpoint            string
 	AllowedIPs          []netip.Prefix
 	PersistentKeepalive uint16
+	MetricsID           string
+}
+
+// MetricsPeerID returns the configured metrics ID, or a stable opaque ID
+// derived from the peer public key when WGFPeerID is unset.
+func MetricsPeerID(peer Peer) string {
+	if peer.MetricsID != "" {
+		return peer.MetricsID
+	}
+	hash := blake2s.Sum256(append([]byte("wgf:"), peer.PublicKey[:]...))
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:10]))
 }
 
 // Config is a validated v1 configuration.
@@ -99,7 +124,7 @@ const (
 )
 
 const (
-	interfacePrivateKey uint16 = 1 << iota
+	interfacePrivateKey uint32 = 1 << iota
 	interfaceListenPort
 	interfaceMTU
 	interfaceMTUDiscovery
@@ -114,6 +139,10 @@ const (
 	interfaceTUNQueues
 	interfaceSocketBuffer
 	interfaceFwMark
+	interfaceMetrics
+	interfaceMetricsListen
+	interfaceMetricsInclude
+	interfaceMetricsExclude
 )
 
 const (
@@ -121,13 +150,14 @@ const (
 	peerEndpoint
 	peerPersistentKeepalive
 	peerPresharedKey
+	peerMetricsID
 )
 
 type parser struct {
 	config          Config
 	section         section
 	interfaceSeen   bool
-	interfaceFields uint16
+	interfaceFields uint32
 	peerFields      []uint8
 }
 
@@ -209,7 +239,7 @@ func Parse(reader io.Reader) (*Config, error) {
 			return lineError(lineNumber, errors.New("expected key = value"))
 		}
 		key, value := source.Key, source.Value
-		if key == "" || value == "" {
+		if key == "" || (value == "" && !emptyMetricSelectionField(p.section, key)) {
 			return lineError(lineNumber, errors.New("empty key or value"))
 		}
 
@@ -256,6 +286,7 @@ func defaultConfig() Config {
 		Workers:             AutoCount{Auto: true},
 		TUNQueues:           AutoCount{Auto: true},
 		SocketBuffer:        DefaultSocketBuffer,
+		MetricsListen:       MetricsListen{Auto: true},
 	}}
 }
 
@@ -296,8 +327,9 @@ func (p *parser) parseField(key, value string) error {
 	}
 }
 
+//nolint:cyclop,funlen // Keeping the stable user-facing interface-key dispatch together makes validation errors clear.
 func (p *parser) parseInterfaceField(name, value string) error {
-	field, repeated := uint16(0), false
+	field, repeated := uint32(0), false
 
 	switch name {
 	case "Address":
@@ -417,6 +449,34 @@ func (p *parser) parseInterfaceField(name, value string) error {
 			return fmt.Errorf("WGFTUNQueues: %w", err)
 		}
 		p.config.Interface.TUNQueues = count
+	case "WGFMetrics":
+		field = interfaceMetrics
+		boolean, err := parseMetricsEnabled(value)
+		if err != nil {
+			return fmt.Errorf("WGFMetrics: %w", err)
+		}
+		p.config.Interface.Metrics = boolean
+	case "WGFMetricsListen":
+		field = interfaceMetricsListen
+		listen, err := parseMetricsListen(value)
+		if err != nil {
+			return fmt.Errorf("WGFMetricsListen: %w", err)
+		}
+		p.config.Interface.MetricsListen = listen
+	case "WGFMetricsInclude":
+		field = interfaceMetricsInclude
+		patterns, err := parseMetricPatterns(value)
+		if err != nil {
+			return fmt.Errorf("WGFMetricsInclude: %w", err)
+		}
+		p.config.Interface.MetricsInclude = patterns
+	case "WGFMetricsExclude":
+		field = interfaceMetricsExclude
+		patterns, err := parseMetricPatterns(value)
+		if err != nil {
+			return fmt.Errorf("WGFMetricsExclude: %w", err)
+		}
+		p.config.Interface.MetricsExclude = patterns
 	default:
 		return fmt.Errorf("unknown [Interface] field %q", name)
 	}
@@ -476,6 +536,12 @@ func (p *parser) parsePeerField(name, value string) error {
 			}
 			peer.PersistentKeepalive = seconds
 		}
+	case "WGFPeerID":
+		field = peerMetricsID
+		if !validMetricsID(value) {
+			return errors.New("WGFPeerID: must match [a-z0-9][a-z0-9_-]{0,31}")
+		}
+		peer.MetricsID = value
 	default:
 		return fmt.Errorf("unknown [Peer] field %q", name)
 	}
@@ -526,17 +592,36 @@ func (p *parser) validate() error {
 	if iface.ReorderMaxDelay <= 0 {
 		return errors.New("WGFReorderMaxDelay must be positive")
 	}
+	if _, err := metrics.NewSelector(iface.MetricsInclude, iface.MetricsExclude); err != nil {
+		return err
+	}
 
-	seenKeys := make(map[Key]struct{}, len(p.config.Peers))
 	for i := range p.config.Peers {
 		if p.peerFields[i]&peerPublicKey == 0 {
 			return fmt.Errorf("peer %d is missing PublicKey", i+1)
 		}
-		key := p.config.Peers[i].PublicKey
-		if _, exists := seenKeys[key]; exists {
+	}
+	return ValidatePeers(p.config.Peers)
+}
+
+// ValidatePeers validates peer identities shared by file parsing and runtime
+// configuration updates.
+func ValidatePeers(peers []Peer) error {
+	seenKeys := make(map[Key]struct{}, len(peers))
+	seenMetricsIDs := make(map[string]struct{}, len(peers))
+	for i, peer := range peers {
+		if _, exists := seenKeys[peer.PublicKey]; exists {
 			return fmt.Errorf("peer %d duplicates PublicKey", i+1)
 		}
-		seenKeys[key] = struct{}{}
+		seenKeys[peer.PublicKey] = struct{}{}
+		if peer.MetricsID != "" && !validMetricsID(peer.MetricsID) {
+			return fmt.Errorf("peer %d has invalid WGFPeerID", i+1)
+		}
+		id := MetricsPeerID(peer)
+		if _, exists := seenMetricsIDs[id]; exists {
+			return fmt.Errorf("peer %d duplicates WGFPeerID", i+1)
+		}
+		seenMetricsIDs[id] = struct{}{}
 	}
 	return nil
 }
@@ -675,6 +760,87 @@ func parseAutoCount(value string) (AutoCount, error) {
 		return AutoCount{}, err
 	}
 	return AutoCount{Count: count}, nil
+}
+
+func parseMetricsListen(value string) (MetricsListen, error) {
+	if value == "auto" {
+		return MetricsListen{Auto: true}, nil
+	}
+	parts := strings.Split(value, ",")
+	addresses := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return MetricsListen{}, errors.New("contains an empty address")
+		}
+		host, port, err := net.SplitHostPort(part)
+		if err != nil || host == "" {
+			return MetricsListen{}, errors.New("must be an IP literal and port")
+		}
+		address, err := netip.ParseAddr(host)
+		if err != nil || address.Is4In6() {
+			return MetricsListen{}, errors.New("host must be an IP literal")
+		}
+		portNumber, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || portNumber == 0 {
+			return MetricsListen{}, errors.New("port must be in 1..65535")
+		}
+		canonical := net.JoinHostPort(address.String(), strconv.FormatUint(portNumber, 10))
+		if _, exists := seen[canonical]; exists {
+			return MetricsListen{}, fmt.Errorf("duplicate address %q", part)
+		}
+		seen[canonical] = struct{}{}
+		addresses = append(addresses, canonical)
+	}
+	return MetricsListen{Addresses: addresses}, nil
+}
+
+func parseMetricPatterns(value string) ([]string, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parts := strings.Split(value, ",")
+	patterns := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, errors.New("contains an empty pattern")
+		}
+		patterns = append(patterns, part)
+	}
+	return patterns, nil
+}
+
+func emptyMetricSelectionField(section section, key string) bool {
+	return section == sectionInterface && (key == "WGFMetricsInclude" || key == "WGFMetricsExclude")
+}
+
+func parseMetricsEnabled(value string) (bool, error) {
+	switch value {
+	case "on":
+		return true, nil
+	case "off":
+		return false, nil
+	default:
+		return false, errors.New("must be on or off")
+	}
+}
+
+func validMetricsID(value string) bool {
+	if len(value) == 0 || len(value) > 32 {
+		return false
+	}
+	first := value[0]
+	if (first < 'a' || first > 'z') && (first < '0' || first > '9') {
+		return false
+	}
+	for _, char := range value[1:] {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func parseBool(value string) (bool, error) {
