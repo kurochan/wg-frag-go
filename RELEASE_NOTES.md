@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.4.1 - 2026-08-30T13:51:12Z
+
+<!-- debian: urgency=medium -->
+
+- Reject release tags that do not advance beyond the latest existing release, using Semantic Versioning ordering for release candidates.
+- Add `make release-tag-check VERSION=vX.Y.Z` for the same validation before creating a tag.
+
 ## 0.4.0 - 2026-08-30T13:38:47Z
 
 <!-- debian: urgency=medium -->
