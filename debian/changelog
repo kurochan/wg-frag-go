@@ -1,3 +1,14 @@
+wg-frag-go (0.4.0-1) noble; urgency=medium
+
+  * Add an optional OpenMetrics endpoint with loopback-only default binding and
+    configurable metric selection.
+  * Allow `wgf check` to validate configurations that include `wgf quick`
+    settings without running hooks or inspecting host routes.
+  * Document installation from the Launchpad PPA and the OpenMetrics
+    configuration.
+
+ -- kurochan <kuro@kurochan.org>  Sun, 30 Aug 2026 13:38:47 +0000
+
 wg-frag-go (0.3.0-1) noble; urgency=medium
 
   * Move Ubuntu package publishing to the `kurochan/wg-frag-go` Launchpad PPA.
