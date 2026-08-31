@@ -148,8 +148,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  ppa:
-    name: Publish Launchpad PPA (${{ matrix.series }})
+  ppa-build:
+    name: Build Launchpad PPA source (${{ matrix.series }})
     needs: [verify, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -163,7 +163,6 @@ jobs:
           - resolute
     env:
       TARGET_SERIES: ${{ matrix.series }}
-    environment: launchpad
     permissions:
       contents: read
     steps:
@@ -187,11 +186,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            debhelper devscripts dput gnupg
+            debhelper devscripts
 
       - name: Prepare vendored source
         run: |
-          set -eu
+          set -euo pipefail
           debian_version="$(dpkg-parsechangelog --show-field Version)"
           upstream_version="$(printf '%s' "$debian_version" | sed 's/-[0-9][^-]*$//')"
           tag_version="${GITHUB_REF_NAME#v}"
@@ -213,16 +212,12 @@ jobs:
             -cf - -C "$RUNNER_TEMP" "wg-frag-go-$upstream_version" | gzip -n > "$orig_tar"
           rm -rf "$orig_root"
 
-      - name: Build, sign, and upload source packages
+      - name: Build unsigned source package
         env:
           DEBEMAIL: kuro@kurochan.org
           DEBFULLNAME: kurochan
-          LAUNCHPAD_GPG_KEY_ID: ${{ vars.LAUNCHPAD_GPG_KEY_ID }}
-          LAUNCHPAD_GPG_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
-          LAUNCHPAD_GPG_PASSPHRASE: ${{ secrets.LAUNCHPAD_GPG_PASSPHRASE }}
         run: |
-          set -eu
-          umask 077
+          set -euo pipefail
 
           case "$TARGET_SERIES" in
             jammy|noble|resolute) ;;
@@ -231,25 +226,6 @@ jobs:
               exit 1
               ;;
           esac
-
-          export GNUPGHOME="$RUNNER_TEMP/gnupg"
-          export GPG_PASSPHRASE_FILE="$RUNNER_TEMP/launchpad-gpg-passphrase"
-          signer="$RUNNER_TEMP/dpkg-gpg-sign"
-          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$GPG_PASSPHRASE_FILE" "$signer" "$RUNNER_TEMP"/ppa-* vendor' EXIT
-          mkdir -p "$GNUPGHOME"
-          chmod 700 "$GNUPGHOME"
-
-          printf '%s' "$LAUNCHPAD_GPG_PRIVATE_KEY" | tr -d '\r' | gpg --batch --import
-          printf '%s' "$LAUNCHPAD_GPG_PASSPHRASE" > "$GPG_PASSPHRASE_FILE"
-          gpg --batch --with-colons --list-secret-keys "$LAUNCHPAD_GPG_KEY_ID" >/dev/null
-
-          cat > "$signer" <<'EOF'
-          #!/bin/sh
-          set -eu
-          exec gpg --batch --yes --pinentry-mode loopback \
-            --passphrase-file "${GPG_PASSPHRASE_FILE:?}" "$@"
-          EOF
-          chmod 700 "$signer"
 
           base_version="$(cat "$RUNNER_TEMP/wgf-debian-version")"
           upstream_version="$(cat "$RUNNER_TEMP/wgf-upstream-version")"
@@ -286,7 +262,299 @@ jobs:
             dpkg-buildpackage -S -sa -d -us -uc
           )
 
-          changes_file="$(find "$build_root" -maxdepth 1 -type f -name '*_source.changes' -print -quit)"
-          test -n "$changes_file"
-          debsign -p"$signer" -k"$LAUNCHPAD_GPG_KEY_ID" "$changes_file"
-          dput ppa:kurochan/wg-frag-go "$changes_file"
+          artifact_root="$RUNNER_TEMP/ppa-source-$TARGET_SERIES"
+          rm -rf "$artifact_root"
+          mkdir -p "$artifact_root"
+
+          mapfile -t changes_files < <(find "$build_root" -maxdepth 1 -type f -name '*_source.changes' -print)
+          if [ "${#changes_files[@]}" -ne 1 ]; then
+            echo "expected one source changes file, found ${#changes_files[@]}" >&2
+            exit 1
+          fi
+          changes_file="${changes_files[0]}"
+          cp -- "$changes_file" "$artifact_root/"
+
+          while IFS= read -r filename; do
+            case "$filename" in
+              ''|*/*|.|..) echo "invalid source package filename: $filename" >&2; exit 1 ;;
+            esac
+            if [[ ! "$filename" =~ ^[A-Za-z0-9][A-Za-z0-9.+~_-]*$ ]]; then
+              echo "unsafe source package filename: $filename" >&2
+              exit 1
+            fi
+            source_file="$build_root/$filename"
+            if [ ! -f "$source_file" ] || [ -L "$source_file" ]; then
+              echo "missing or invalid source package file: $filename" >&2
+              exit 1
+            fi
+            cp -- "$source_file" "$artifact_root/$filename"
+          done < <(
+            awk '
+              $0 == "Checksums-Sha256:" { checksums = 1; next }
+              checksums && /^[^ ]/ { exit }
+              checksums { print $3 }
+            ' "$changes_file"
+          )
+
+          (
+            cd "$artifact_root"
+            mapfile -d '' package_files < <(
+              find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | sort -z
+            )
+            if [ "${#package_files[@]}" -lt 2 ]; then
+              echo "source package artifact is incomplete" >&2
+              exit 1
+            fi
+            sha256sum -- "${package_files[@]}" > SHA256SUMS
+          )
+
+      - name: Upload unsigned source package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ppa-source-${{ matrix.series }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/ppa-source-${{ matrix.series }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  ppa-publish:
+    name: Publish Launchpad PPA (${{ matrix.series }})
+    needs: [release, ppa-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        series:
+          - jammy
+          - noble
+          - resolute
+    env:
+      TARGET_SERIES: ${{ matrix.series }}
+    environment: launchpad
+    permissions:
+      actions: read
+    steps:
+      - name: Download unsigned source package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ppa-source-${{ matrix.series }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/ppa-source-${{ matrix.series }}
+
+      - name: Install signing and upload tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            devscripts dput gnupg
+
+      # This job deliberately does not check out or execute repository code.
+      - name: Validate unsigned source package
+        run: |
+          set -euo pipefail
+
+          case "$TARGET_SERIES" in
+            jammy|noble|resolute) ;;
+            *) echo "unsupported Ubuntu series: $TARGET_SERIES" >&2; exit 1 ;;
+          esac
+
+          artifact_root="$RUNNER_TEMP/ppa-source-$TARGET_SERIES"
+          if find "$artifact_root" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
+            echo "source package artifact contains a non-regular file" >&2
+            exit 1
+          fi
+
+          mapfile -t changes_files < <(find "$artifact_root" -maxdepth 1 -type f -name '*_source.changes' -print)
+          if [ "${#changes_files[@]}" -ne 1 ]; then
+            echo "expected one source changes file, found ${#changes_files[@]}" >&2
+            exit 1
+          fi
+          changes_file="${changes_files[0]}"
+
+          declare -A manifest_files=()
+          while IFS= read -r line; do
+            if [[ ! "$line" =~ ^([0-9a-f]{64})\ \ ([A-Za-z0-9][A-Za-z0-9.+~_-]*)$ ]]; then
+              echo "invalid SHA256SUMS entry" >&2
+              exit 1
+            fi
+            filename="${BASH_REMATCH[2]}"
+            if [ "$filename" = SHA256SUMS ] || [ -n "${manifest_files[$filename]:-}" ]; then
+              echo "duplicate or recursive SHA256SUMS entry: $filename" >&2
+              exit 1
+            fi
+            manifest_files["$filename"]=1
+          done < "$artifact_root/SHA256SUMS"
+
+          if [ "${#manifest_files[@]}" -lt 2 ]; then
+            echo "source package manifest is incomplete" >&2
+            exit 1
+          fi
+          while IFS= read -r -d '' path; do
+            filename="${path##*/}"
+            if [ "$filename" != SHA256SUMS ] && [ -z "${manifest_files[$filename]:-}" ]; then
+              echo "unmanifested source package file: $filename" >&2
+              exit 1
+            fi
+          done < <(find "$artifact_root" -maxdepth 1 -type f -print0)
+          for filename in "${!manifest_files[@]}"; do
+            if [ ! -f "$artifact_root/$filename" ] || [ -L "$artifact_root/$filename" ]; then
+              echo "missing or invalid manifested file: $filename" >&2
+              exit 1
+            fi
+          done
+          (cd "$artifact_root" && sha256sum --check --strict SHA256SUMS)
+
+          read_field() {
+            local field="$1"
+            local value
+            value="$(sed -n "s/^${field}: //p" "$changes_file")"
+            if [ -z "$value" ] || [ "$(printf '%s\n' "$value" | wc -l)" -ne 1 ]; then
+              echo "missing or repeated $field field in source changes file" >&2
+              exit 1
+            fi
+            printf '%s' "$value"
+          }
+
+          source_name="$(read_field Source)"
+          package_version="$(read_field Version)"
+          distribution="$(read_field Distribution)"
+          architecture="$(read_field Architecture)"
+          if [ "$source_name" != wg-frag-go ] || [ "$distribution" != "$TARGET_SERIES" ] || [ "$architecture" != source ]; then
+            echo "source changes metadata does not match the requested package and series" >&2
+            exit 1
+          fi
+
+          tag_version="${GITHUB_REF_NAME#v}"
+          expected_upstream="$(printf '%s' "$tag_version" | sed -E 's/-([[:alnum:]]+)\./~\1./g')"
+          attempt="${GITHUB_RUN_ATTEMPT:-1}"
+          case "$attempt" in
+            ''|0|*[!0-9]*) echo "invalid GITHUB_RUN_ATTEMPT: $attempt" >&2; exit 1 ;;
+          esac
+          series_attempt="${package_version##*+$TARGET_SERIES}"
+          case "$series_attempt" in
+            ''|0|*[!0-9]*) echo "invalid series build attempt: $series_attempt" >&2; exit 1 ;;
+          esac
+          if [ "$series_attempt" -gt "$attempt" ]; then
+            echo "series build attempt is newer than the workflow attempt" >&2
+            exit 1
+          fi
+          suffix="+$TARGET_SERIES$series_attempt"
+          case "$package_version" in
+            "$expected_upstream"-*"$suffix") ;;
+            *) echo "unexpected source package version: $package_version" >&2; exit 1 ;;
+          esac
+          debian_revision="${package_version#"$expected_upstream"-}"
+          debian_revision="${debian_revision%"$suffix"}"
+          case "$debian_revision" in
+            ''|*[!0-9]*) echo "invalid Debian revision: $debian_revision" >&2; exit 1 ;;
+          esac
+          expected_changes_file="$artifact_root/wg-frag-go_${package_version}_source.changes"
+          if [ "$changes_file" != "$expected_changes_file" ]; then
+            echo "source changes filename does not match its package version" >&2
+            exit 1
+          fi
+
+          declare -A referenced_files=()
+          dsc_count=0
+          while read -r digest size filename extra; do
+            case "$filename" in
+              ''|*/*|.|..) echo "invalid referenced filename: $filename" >&2; exit 1 ;;
+            esac
+            if [ -n "$extra" ] || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]] || [[ ! "$size" =~ ^[0-9]+$ ]]; then
+              echo "invalid checksum metadata for $filename" >&2
+              exit 1
+            fi
+            if [ -n "${referenced_files[$filename]:-}" ]; then
+              echo "duplicate referenced filename: $filename" >&2
+              exit 1
+            fi
+            referenced_files["$filename"]=1
+            [ "${filename%.dsc}" = "$filename" ] || dsc_count=$((dsc_count + 1))
+            actual_digest="$(sha256sum "$artifact_root/$filename" | cut -d ' ' -f 1)"
+            actual_size="$(wc -c < "$artifact_root/$filename" | tr -d '[:space:]')"
+            if [ "$actual_digest" != "$digest" ] || [ "$actual_size" != "$size" ]; then
+              echo "source changes checksum mismatch: $filename" >&2
+              exit 1
+            fi
+          done < <(
+            awk '
+              $0 == "Checksums-Sha256:" { checksums = 1; next }
+              checksums && /^[^ ]/ { exit }
+              checksums { sub(/^ +/, ""); print }
+            ' "$changes_file"
+          )
+          if [ "${#referenced_files[@]}" -lt 1 ] || [ "$dsc_count" -ne 1 ]; then
+            echo "source changes file does not reference exactly one dsc file" >&2
+            exit 1
+          fi
+
+          declare -A upload_files=()
+          while read -r digest size section priority filename extra; do
+            case "$filename" in
+              ''|*/*|.|..) echo "invalid upload filename: $filename" >&2; exit 1 ;;
+            esac
+            if [ -n "$extra" ] || [[ ! "$digest" =~ ^[0-9a-f]{32}$ ]] || [[ ! "$size" =~ ^[0-9]+$ ]] || [ -z "$section" ] || [ -z "$priority" ]; then
+              echo "invalid Files metadata for $filename" >&2
+              exit 1
+            fi
+            if [ -n "${upload_files[$filename]:-}" ]; then
+              echo "duplicate upload filename: $filename" >&2
+              exit 1
+            fi
+            upload_files["$filename"]=1
+          done < <(
+            awk '
+              $0 == "Files:" { files = 1; next }
+              files && /^[^ ]/ { exit }
+              files { sub(/^ +/, ""); print }
+            ' "$changes_file"
+          )
+          if [ "${#upload_files[@]}" -ne "${#referenced_files[@]}" ]; then
+            echo "Files and Checksums-Sha256 contain different file sets" >&2
+            exit 1
+          fi
+          for filename in "${!referenced_files[@]}"; do
+            if [ -z "${upload_files[$filename]:-}" ]; then
+              echo "file missing from upload list: $filename" >&2
+              exit 1
+            fi
+          done
+          for filename in "${!manifest_files[@]}"; do
+            if [ "$artifact_root/$filename" != "$changes_file" ] && [ -z "${referenced_files[$filename]:-}" ]; then
+              echo "unexpected source package file: $filename" >&2
+              exit 1
+            fi
+          done
+
+          printf 'PPA_CHANGES_FILE=%s\n' "$changes_file" >> "$GITHUB_ENV"
+
+      - name: Sign and upload source package
+        env:
+          LAUNCHPAD_GPG_KEY_ID: ${{ vars.LAUNCHPAD_GPG_KEY_ID }}
+          LAUNCHPAD_GPG_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
+          LAUNCHPAD_GPG_PASSPHRASE: ${{ secrets.LAUNCHPAD_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          export GPG_PASSPHRASE_FILE="$RUNNER_TEMP/launchpad-gpg-passphrase"
+          signer="$RUNNER_TEMP/dpkg-gpg-sign"
+          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$GPG_PASSPHRASE_FILE" "$signer"' EXIT
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+
+          printf '%s' "$LAUNCHPAD_GPG_PRIVATE_KEY" | tr -d '\r' | gpg --batch --import
+          printf '%s' "$LAUNCHPAD_GPG_PASSPHRASE" > "$GPG_PASSPHRASE_FILE"
+          gpg --batch --with-colons --list-secret-keys "$LAUNCHPAD_GPG_KEY_ID" >/dev/null
+
+          cat > "$signer" <<'EOF'
+          #!/bin/sh
+          set -eu
+          exec gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-file "${GPG_PASSPHRASE_FILE:?}" "$@"
+          EOF
+          chmod 700 "$signer"
+
+          debsign -p"$signer" -k"$LAUNCHPAD_GPG_KEY_ID" "$PPA_CHANGES_FILE"
+          dput ppa:kurochan/wg-frag-go "$PPA_CHANGES_FILE"

@@ -35,12 +35,16 @@ Upload each generated source changes file with:
 
     dput ppa:kurochan/wg-frag-go ../wg-frag-go_<version>_source.changes
 
-The GitHub Actions job performs this upload for all supported series. On a
-workflow rerun, `GITHUB_RUN_ATTEMPT` increments the series suffix (`+jammy1`,
-then `+jammy2`, for example).
+GitHub Actions builds and tests each unsigned source package without access to
+the Launchpad signing key. A separate job on a fresh runner validates the
+artifact, signs it, and uploads it for each supported series. The signing job
+does not check out the repository or run the package build. On a workflow
+rerun, `GITHUB_RUN_ATTEMPT` increments the series suffix (`+jammy1`, then
+`+jammy2`, for example). Retrying only a failed publishing job reuses the
+already validated source artifact and its version.
 
-The GitHub Actions PPA job expects the following values in the `launchpad`
-Environment:
+The GitHub Actions PPA publishing job expects the following values in the
+`launchpad` Environment:
 
 * Environment secret `LAUNCHPAD_GPG_PRIVATE_KEY`: ASCII-armored private key
   registered with Launchpad.
