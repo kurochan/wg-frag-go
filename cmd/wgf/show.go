@@ -9,25 +9,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/controlapi"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
 )
 
 // statusGetter is injected by tests; the default queries the daemon socket.
-type statusGetter func(ctx context.Context, socketPath string) (*controlapiv1.GetStatusResponse, error)
+type statusGetter func(ctx context.Context, socketPath, interfaceName string) (*controlapiv1.InterfaceStatus, error)
+type statusLister func(ctx context.Context, socketPath string) ([]*controlapiv1.InterfaceStatus, error)
 
-func show(args []string, getStatus statusGetter, stdout io.Writer) error {
+func show(args []string, getStatus statusGetter, listStatuses statusLister, stdout io.Writer) error {
 	if len(args) == 0 || args[0] == "" || args[0] == "all" {
-		return showAll(getStatus, filepath.Dir(controlapi.SocketPath("x")), stdout)
+		return showAll(getStatus, listStatuses, filepath.Dir(controlapi.SocketPath("x")), stdout)
 	}
 	if args[0] == "interfaces" {
-		return showInterfaces(getStatus, filepath.Dir(controlapi.SocketPath("x")), stdout)
+		return showInterfaces(getStatus, listStatuses, filepath.Dir(controlapi.SocketPath("x")), stdout)
 	}
 	ifname := args[0]
 	socket := controlapi.SocketPath(ifname)
 	view := ""
 
 	rest := args[1:]
+	explicitSocket := false
 	for len(rest) != 0 {
 		switch rest[0] {
 		case "--control-socket":
@@ -35,6 +37,7 @@ func show(args []string, getStatus statusGetter, stdout io.Writer) error {
 				return errors.New("--control-socket requires a path")
 			}
 			socket = rest[1]
+			explicitSocket = true
 			rest = rest[2:]
 		case "fragment", "path-mtu", "stats":
 			if view != "" {
@@ -46,7 +49,17 @@ func show(args []string, getStatus statusGetter, stdout io.Writer) error {
 			return fmt.Errorf("unexpected argument %q", rest[0])
 		}
 	}
-	status, err := getStatus(context.Background(), socket)
+	status, err := getStatus(context.Background(), socket, ifname)
+	if err != nil && !explicitSocket {
+		perInterfaceErr := err
+		status, err = getStatus(context.Background(), controlapi.ManagerSocketPath(), ifname)
+		if err != nil {
+			err = errors.Join(
+				fmt.Errorf("per-interface control socket: %w", perInterfaceErr),
+				fmt.Errorf("manager control socket: %w", err),
+			)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("is `wgf run %s` running? %w", ifname, err)
 	}
@@ -64,8 +77,8 @@ func show(args []string, getStatus statusGetter, stdout io.Writer) error {
 	return nil
 }
 
-func renderStatus(w io.Writer, status *controlapiv1.GetStatusResponse) {
-	fmt.Fprintf(w, "interface: %s\n", status.GetInterfaceName())
+func renderStatus(w io.Writer, status *controlapiv1.InterfaceStatus) {
+	fmt.Fprintf(w, "interface: %s\n", status.GetRef().GetInterfaceName())
 	fmt.Fprintf(w, "  public key: %s\n", status.GetPublicKey())
 	fmt.Fprintf(w, "  listening port: %d\n", status.GetListenPort())
 	fmt.Fprintf(w, "  mtu: %d\n", status.GetMtu())

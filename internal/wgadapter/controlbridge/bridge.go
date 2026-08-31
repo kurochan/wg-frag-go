@@ -79,6 +79,7 @@ type Bridge struct {
 	announced        bool
 	announcedPayload int
 	errorAnnounced   bool
+	detached         bool
 }
 
 // New returns a bridge with DATA fail-closed. Call Start after wireguard-go is
@@ -121,6 +122,9 @@ func isNilTUN(tun TUN) bool {
 func (b *Bridge) Start() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.detached {
+		return nil
+	}
 	if b.started {
 		return nil
 	}
@@ -141,8 +145,29 @@ func (b *Bridge) Start() error {
 // later session reset from restoring an older snapshot.
 func (b *Bridge) UpdateRoutes(routes *peerroute.Snapshot) {
 	b.mu.Lock()
+	if b.detached {
+		b.mu.Unlock()
+		return
+	}
 	b.senderBase.AllowedIPs = routes
 	b.receiverBase.AllowedIPs = routes
+	b.mu.Unlock()
+}
+
+// Detach makes the bridge inert. It waits for an operation already in
+// progress, so callers can safely remove the bridge and reuse its peer slot
+// after Detach returns.
+func (b *Bridge) Detach() {
+	b.mu.Lock()
+	b.detached = true
+	b.mu.Unlock()
+}
+
+// Attach reactivates a bridge after a transaction that was rolled back. The
+// caller must restore the shim and WireGuard tables before attaching it.
+func (b *Bridge) Attach() {
+	b.mu.Lock()
+	b.detached = false
 	b.mu.Unlock()
 }
 
@@ -162,6 +187,9 @@ func (b *Bridge) DeliverControl(peer peerroute.PeerID, frame []byte) error {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.detached {
+		return nil
+	}
 	outbound, err := b.engine.HandleInbound(frame)
 	if err != nil {
 		return err
@@ -176,6 +204,9 @@ func (b *Bridge) DeliverControl(peer peerroute.PeerID, frame []byte) error {
 func (b *Bridge) Tick(now time.Time) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.detached {
+		return nil
+	}
 	outbound, err := b.engine.Tick(now)
 	if err != nil {
 		return err
@@ -192,6 +223,9 @@ func (b *Bridge) ReportTransportError(now time.Time, transportErr error, udpPayl
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.detached {
+		return nil
+	}
 	outbound, err := b.engine.ReportSendFailure(now, udpPayloadSize)
 	if err != nil {
 		return err
@@ -206,6 +240,9 @@ func (b *Bridge) ReportUnknownDataSession(peer peerroute.PeerID, sessionID uint1
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.detached {
+		return nil
+	}
 	outbound, err := b.engine.ReportUnknownDataSession(sessionID)
 	if err != nil {
 		return err
@@ -221,9 +258,14 @@ func (b *Bridge) markStartedLocked() {
 }
 
 func (b *Bridge) applyLocked(outbound []controlplane.Outbound) error {
+	if b.detached {
+		return nil
+	}
 	defer func() {
-		// Observability must never make a peer unavailable. The owner key stops
-		// a stale callback from updating a peer that reused this slot.
+		// Observability must never make a peer unavailable.
+		if b.detached {
+			return
+		}
 		_ = b.tun.SetPeerPMTUState(b.peerID, b.ownerKey, b.engine.ConfirmedCarrierPayload(), b.engine.PMTUSearching())
 	}()
 	dataAllowed := b.engine.DataSendAllowed()

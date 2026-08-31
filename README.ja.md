@@ -30,8 +30,8 @@ WireGuard セッションを確立できますが、WGF carrier は交換でき�
   メモリ確保なし。
 - RFC 8899 を基にした実行時 DPLPMTUD。安全な613-byteの carrier payloadから開始し、
   経路に合わせて拡大します。
-- WireGuard 互換の複数peer設定、`AllowedIPs` 選択と受信元検証、ローカル gRPC control
-  API、systemd を提供します。
+- WireGuard 互換の複数peer設定、`AllowedIPs` 選択と受信元検証、transport非依存の
+  Go manager API、ローカル gRPC adapter、複数interface管理、systemd を提供します。
 
 互換性の境界と状態機械の規則は [wire protocol](docs/protocol.md) を参照してください。
 
@@ -44,9 +44,9 @@ WGF は設定した内側 MTU を維持しながら、定常状態の転送で G
 
 ## 最短導入
 
-WGF は Linux amd64 / arm64 と macOS amd64 / arm64 で動作します。Linux は `wgf run` と
-`wgf quick` に対応し、macOS は現時点で `wgf run` のみ対応します。interfaceの作成と
-route管理には root または同等の network 権限が必要です。
+WGF は Linux amd64 / arm64 と macOS amd64 / arm64 で動作します。Linux は `wgf run`、
+`wgf manager`、`wgf quick` に対応し、macOS は `wgf run` と `wgf manager` に対応します。
+interfaceの作成と route管理には root または同等の network 権限が必要です。
 
 対応 Ubuntu release では Launchpad PPA から導入できます。
 
@@ -73,6 +73,8 @@ package は tunnel unit を自動で enable / start しません。GitHub Releas
 - [Installation and operations](docs/install.md): release package、PPA、起動、診断、
   AppArmor、upgrade。
 - [Configuration reference](docs/configuration.md): interface、peer、WGF 固有設定の全項目。
+- [Control API](docs/control-api.md): in-process Go API、public gRPC API、複数interface
+  manager、lifecycle、mutationの規則。
 - [Wire protocol](docs/protocol.md): carrier format、capability、PMTU、reassembly の仕様。
 - [Security model](docs/threat-model.md): trust boundary、検証、残存リスク。
 - [Benchmarks](docs/benchmark.md): 再現可能な Internet / Linux の測定結果。

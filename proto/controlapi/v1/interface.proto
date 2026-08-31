@@ -1,0 +1,107 @@
+edition = "2024";
+
+package wgf.controlapi.v1;
+
+import "controlapi/v1/common.proto";
+
+option go_package = "github.com/kurochan/wg-frag-go/proto/controlapi/v1;controlapiv1";
+
+// InterfaceSpec is the complete runtime configuration for one interface.
+// Address and route policy are intentionally managed outside this API.
+message InterfaceSpec {
+  string interface_name = 1;
+  bytes private_key = 2;
+  uint32 listen_port = 3;
+  uint32 mtu = 4;
+  string mtu_discovery = 5;
+  uint32 min_carrier_payload = 6;
+  uint32 max_carrier_payload = 7;
+  uint32 reassembly_slots = 8;
+  uint32 peer_reassembly_slots = 9;
+  uint32 reassembly_lifetime_ms = 10;
+  bool reorder = 11;
+  uint32 reorder_max_delay_ms = 12;
+  uint32 workers = 13;
+  uint32 tun_queues = 14;
+  uint32 socket_buffer = 15;
+  uint32 fw_mark = 16;
+  repeated PeerSpec peers = 17;
+}
+
+// PeerSpec is one peer in an interface desired state.
+message PeerSpec {
+  string public_key = 1;
+  string endpoint = 2;
+  repeated string allowed_ips = 3;
+  uint32 persistent_keepalive_sec = 4;
+  bytes preshared_key = 5;
+  PresharedKeyAction preshared_key_action = 6;
+  string metrics_id = 7;
+}
+
+enum PresharedKeyAction {
+  PRESERVE = 0;
+  SET = 1;
+  CLEAR = 2;
+}
+
+// InterfaceStatus is the observable state of one interface.
+message InterfaceStatus {
+  InterfaceRef ref = 1;
+  InterfaceLifecycle lifecycle = 2;
+  string lifecycle_error = 3;
+  string public_key = 4;
+  uint32 listen_port = 5;
+  uint32 mtu = 6;
+  ShimCounters counters = 7;
+  repeated PeerStatus peers = 8;
+  uint64 generation = 9;
+  // spec is the current non-secret desired state. Private keys are never
+  // returned; RestartInterface preserves the current private key when omitted.
+  InterfaceSpec spec = 10;
+  // native_interface_name is the OS TUN name. It can differ from the managed
+  // interface name, notably when macOS allocates a utunN device.
+  string native_interface_name = 11;
+}
+
+message PeerStatus {
+  string public_key = 1;
+  string endpoint = 2;
+  repeated string allowed_ips = 3;
+  int64 last_handshake_unix = 4;
+  uint64 transfer_rx_bytes = 5;
+  uint64 transfer_tx_bytes = 6;
+  uint32 persistent_keepalive_sec = 7;
+  uint32 confirmed_carrier_payload = 8;
+  bool pmtu_searching = 9;
+  bool data_ready = 10;
+  string control_path_state = 11;
+  string control_path_error = 12;
+  bytes preshared_key = 13;
+  string metrics_id = 14;
+}
+
+message ShimCounters {
+  uint64 tx_carriers = 1;
+  uint64 tx_packet_drops = 2;
+  uint64 tx_route_drops = 3;
+  uint64 tx_peer_mtu_drops = 13;
+  uint64 tx_ptb_sent = 14;
+  uint64 control_exploratory_evictions = 15;
+  uint64 control_coalesces = 16;
+  uint64 control_rate_suppression_episodes = 17;
+  uint64 control_ingress_rate_limited = 18;
+  uint64 rx_data_carriers = 4;
+  uint64 rx_inner_delivered = 5;
+  uint64 rx_packet_rejects = 6;
+  uint64 rx_source_spoof_drops = 7;
+  uint64 rx_native_write_drops = 8;
+  uint64 carrier_queue_overflows = 9;
+  uint64 preconfirm_drops = 10;
+  uint64 reassembly_expirations = 11;
+  uint64 udp_socket_drops = 12;
+  uint64 control_queue_drops = 19;
+  uint64 control_materialization_drops = 20;
+  uint64 tx_native_fragment_drops = 21;
+  uint64 rx_native_fragment_drops = 22;
+}

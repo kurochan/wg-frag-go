@@ -8,5 +8,9 @@ import (
 )
 
 func runCommand(_ []string, _ io.Writer, _ io.Writer) error {
-	return errors.New("run is currently supported on Linux only")
+	return errors.New("wgf run is supported only on Linux and macOS")
+}
+
+func managerCommand(_ []string, _ io.Writer, _ io.Writer) error {
+	return errors.New("wgf manager is supported only on Linux and macOS")
 }

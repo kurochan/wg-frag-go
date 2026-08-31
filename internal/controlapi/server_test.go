@@ -3,15 +3,18 @@ package controlapi
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/kurochan/wg-frag-go/internal/platform/runtimedir"
 	"golang.org/x/sys/unix"
 
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // shortSocketPath avoids the 104-byte sun_path limit that t.TempDir exceeds
@@ -26,22 +29,54 @@ func shortSocketPath(t *testing.T) string {
 	return filepath.Join(directory, "wgf0.sock")
 }
 
-func testStatus(context.Context, bool) (*controlapiv1.GetStatusResponse, error) {
+func testGetInterface(context.Context, *controlapiv1.GetInterfaceRequest) (*controlapiv1.GetInterfaceResponse, error) {
 	peer := controlapiv1.PeerStatus_builder{}.Build()
 	peer.SetEndpoint("192.0.2.1:51820")
 	peer.SetDataReady(true)
-	status := controlapiv1.GetStatusResponse_builder{}.Build()
-	status.SetInterfaceName("wgf0")
+	ref := controlapiv1.InterfaceRef_builder{}.Build()
+	ref.SetInterfaceName("wgf0")
+	status := controlapiv1.InterfaceStatus_builder{}.Build()
+	status.SetRef(ref)
 	status.SetListenPort(51820)
 	status.SetMtu(9612)
 	status.SetPeers([]*controlapiv1.PeerStatus{peer})
-	return status, nil
+	response := controlapiv1.GetInterfaceResponse_builder{}.Build()
+	response.SetStatus(status)
+	return response, nil
+}
+
+type testService struct {
+	controlapiv1.UnimplementedControlServiceServer
+	getInterface func(context.Context, *controlapiv1.GetInterfaceRequest) (*controlapiv1.GetInterfaceResponse, error)
+}
+
+func (service *testService) GetInterface(ctx context.Context, request *controlapiv1.GetInterfaceRequest) (*controlapiv1.GetInterfaceResponse, error) {
+	return service.getInterface(ctx, request)
+}
+
+func testConfig(socket string) Config {
+	return Config{SocketPath: socket, Service: &testService{getInterface: testGetInterface}}
+}
+
+func dialTestService(t *testing.T, socket string) controlapiv1.ControlServiceClient {
+	t.Helper()
+	conn, err := grpc.NewClient("unix:"+socket,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return controlapiv1.NewControlServiceClient(conn)
 }
 
 func TestStatusRoundTripOverUnixSocket(t *testing.T) {
 	t.Parallel()
 	socket := shortSocketPath(t)
-	server, err := New(Config{SocketPath: socket, Status: testStatus})
+	server, err := New(testConfig(socket))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +88,13 @@ func TestStatusRoundTripOverUnixSocket(t *testing.T) {
 	if info, err := os.Stat(filepath.Dir(socket)); err != nil || info.Mode().Perm() != 0o700 {
 		t.Fatalf("socket directory mode = %v, %v; want 0700", info.Mode().Perm(), err)
 	}
-	status, err := GetStatus(context.Background(), socket)
+	client := dialTestService(t, socket)
+	request := controlapiv1.GetInterfaceRequest_builder{}.Build()
+	status, err := client.GetInterface(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.GetInterfaceName() != "wgf0" || len(status.GetPeers()) != 1 || !status.GetPeers()[0].GetDataReady() {
+	if status.GetStatus().GetRef().GetInterfaceName() != "wgf0" || len(status.GetStatus().GetPeers()) != 1 || !status.GetStatus().GetPeers()[0].GetDataReady() {
 		t.Fatalf("status = %+v", status)
 	}
 }
@@ -65,11 +102,11 @@ func TestStatusRoundTripOverUnixSocket(t *testing.T) {
 func TestNewRefusesLiveSocketAndReclaimsStaleOne(t *testing.T) {
 	t.Parallel()
 	socket := shortSocketPath(t)
-	first, err := New(Config{SocketPath: socket, Status: testStatus})
+	first, err := New(testConfig(socket))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(Config{SocketPath: socket, Status: testStatus}); err == nil {
+	if _, err := New(testConfig(socket)); err == nil {
 		t.Fatal("New() accepted a socket another instance is serving")
 	}
 	// Simulate a dead daemon: stop serving without invoking Server.Close,
@@ -77,7 +114,7 @@ func TestNewRefusesLiveSocketAndReclaimsStaleOne(t *testing.T) {
 	first.grpc.Stop()
 	_ = first.listener.Close()
 	first.releaseLock()
-	second, err := New(Config{SocketPath: socket, Status: testStatus})
+	second, err := New(testConfig(socket))
 	if err != nil {
 		t.Fatalf("New() did not reclaim a stale socket: %v", err)
 	}
@@ -90,7 +127,7 @@ func TestNewRefusesNonSocketPath(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(Config{SocketPath: path, Status: testStatus}); err == nil || errors.Is(err, os.ErrNotExist) {
+	if _, err := New(testConfig(path)); err == nil || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("New() error = %v, want refusal to delete a non-socket", err)
 	}
 }
@@ -151,7 +188,7 @@ func TestConcurrentNewHasSingleSocketOwner(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			server, err := New(Config{SocketPath: path, Status: testStatus})
+			server, err := New(testConfig(path))
 			if err != nil {
 				errorsSeen <- err
 				return
@@ -188,7 +225,7 @@ func TestNewRefusesInsecureSocketDirectory(t *testing.T) {
 	if err := os.Chmod(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(Config{SocketPath: filepath.Join(directory, "wgf0.sock"), Status: testStatus}); err == nil {
+	if _, err := New(testConfig(filepath.Join(directory, "wgf0.sock"))); err == nil {
 		t.Fatal("New() accepted an insecure socket directory")
 	}
 }
@@ -208,7 +245,7 @@ func TestNewRefusesSocketDirectorySymlink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if _, err := New(Config{SocketPath: filepath.Join(link, "wgf0.sock"), Status: testStatus}); err == nil {
+	if _, err := New(testConfig(filepath.Join(link, "wgf0.sock"))); err == nil {
 		t.Fatal("New() followed a symlink in the socket directory")
 	}
 }
@@ -252,7 +289,7 @@ func TestNewCreatesMissingSocketDirectoryOwnerOnly(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	directory := filepath.Join(root, "missing", "nested")
-	server, err := New(Config{SocketPath: filepath.Join(directory, "wgf0.sock"), Status: testStatus})
+	server, err := New(testConfig(filepath.Join(directory, "wgf0.sock")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,23 +303,10 @@ func TestNewCreatesMissingSocketDirectoryOwnerOnly(t *testing.T) {
 	}
 }
 
-func TestSocketPathDoesNotAliasPathLikeInterfaceNames(t *testing.T) {
-	t.Parallel()
-	for _, input := range []string{"../wgf0", "wgf0/other", "/tmp/wgf0", "..", ""} {
-		path := SocketPath(input)
-		if filepath.Dir(path) != runtimedir.Default || filepath.Base(path) == "wgf0.sock" || path == SocketPath("_") {
-			t.Fatalf("SocketPath(%q) escaped or aliased: %q", input, path)
-		}
-	}
-	if got := SocketPath("wgf0"); got != filepath.Join(runtimedir.Default, "wgf0.sock") {
-		t.Fatalf("SocketPath(valid) = %q", got)
-	}
-}
-
 func TestCloseRemovesSocket(t *testing.T) {
 	t.Parallel()
 	socket := shortSocketPath(t)
-	server, err := New(Config{SocketPath: socket, Status: testStatus})
+	server, err := New(testConfig(socket))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,4 +314,113 @@ func TestCloseRemovesSocket(t *testing.T) {
 	if _, err := os.Lstat(socket); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("socket after Close() = %v, want removed", err)
 	}
+}
+
+func TestCloseWaitsForInFlightRPC(t *testing.T) {
+	t.Parallel()
+	socket := shortSocketPath(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server, err := New(Config{SocketPath: socket, Service: &blockingService{
+		started: started,
+		release: release,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := dialTestService(t, socket)
+	t.Cleanup(server.Close)
+	rpcDone := make(chan error, 1)
+	go func() {
+		_, rpcErr := client.GetInterface(context.Background(), controlapiv1.GetInterfaceRequest_builder{}.Build())
+		rpcDone <- rpcErr
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("RPC did not reach callback")
+	}
+	closeDone := make(chan struct{})
+	go func() {
+		server.Close()
+		close(closeDone)
+	}()
+	select {
+	case <-closeDone:
+		t.Fatal("Server.Close returned before in-flight RPC completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case err := <-rpcDone:
+		if err != nil {
+			t.Fatalf("in-flight RPC: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("in-flight RPC did not complete")
+	}
+	select {
+	case <-closeDone:
+	case <-time.After(time.Second):
+		t.Fatal("Server.Close did not complete after RPC")
+	}
+}
+
+func TestCloseForcesStuckRPCToStopAfterGracePeriod(t *testing.T) {
+	t.Parallel()
+
+	socket := shortSocketPath(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	server, err := New(Config{SocketPath: socket, Service: &blockingService{
+		started: started,
+		release: release,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.gracePeriod = 20 * time.Millisecond
+	client := dialTestService(t, socket)
+	rpcDone := make(chan error, 1)
+	go func() {
+		_, rpcErr := client.GetInterface(context.Background(), controlapiv1.GetInterfaceRequest_builder{}.Build())
+		rpcDone <- rpcErr
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("RPC did not reach callback")
+	}
+
+	closeDone := make(chan struct{})
+	go func() {
+		server.Close()
+		close(closeDone)
+	}()
+	select {
+	case <-closeDone:
+	case <-time.After(time.Second):
+		t.Fatal("Server.Close remained blocked after the grace period")
+	}
+	select {
+	case err := <-rpcDone:
+		if err == nil {
+			t.Fatal("forced server stop returned a successful RPC")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("forced server stop did not release the client RPC")
+	}
+}
+
+type blockingService struct {
+	controlapiv1.UnimplementedControlServiceServer
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (service *blockingService) GetInterface(context.Context, *controlapiv1.GetInterfaceRequest) (*controlapiv1.GetInterfaceResponse, error) {
+	close(service.started)
+	<-service.release
+	return controlapiv1.GetInterfaceResponse_builder{}.Build(), nil
 }

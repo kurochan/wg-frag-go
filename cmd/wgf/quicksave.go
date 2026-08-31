@@ -13,7 +13,7 @@ import (
 
 // renderSavedConfig keeps everything up to the first [Peer] section verbatim
 // and regenerates the peer sections from the running daemon.
-func renderSavedConfig(source string, status *controlapiv1.GetStatusResponse) (string, error) {
+func renderSavedConfig(source string, status *controlapiv1.InterfaceStatus) (string, error) {
 	headEnd := 0
 
 	for line := range strings.Lines(source) {

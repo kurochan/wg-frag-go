@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kurochan/wg-frag-go/controlapi"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
 )
 
@@ -30,23 +32,25 @@ func runInterfaces(socketDir string) []string {
 	return names
 }
 
-func showInterfaces(getStatus statusGetter, socketDir string, stdout io.Writer) error {
-	for _, name := range runInterfaces(socketDir) {
-		if _, err := getStatus(context.Background(), filepath.Join(socketDir, name+".sock")); err == nil {
-			fmt.Fprintln(stdout, name)
-		}
+func showInterfaces(getStatus statusGetter, listStatuses statusLister, socketDir string, stdout io.Writer) error {
+	statuses, err := reachableStatuses(getStatus, listStatuses, socketDir)
+	if err != nil {
+		return err
+	}
+	for _, status := range statuses {
+		fmt.Fprintln(stdout, status.GetRef().GetInterfaceName())
 	}
 	return nil
 }
 
-func showAll(getStatus statusGetter, socketDir string, stdout io.Writer) error {
+func showAll(getStatus statusGetter, listStatuses statusLister, socketDir string, stdout io.Writer) error {
+	statuses, err := reachableStatuses(getStatus, listStatuses, socketDir)
+	if err != nil {
+		return err
+	}
 	first := true
 
-	for _, name := range runInterfaces(socketDir) {
-		status, err := getStatus(context.Background(), filepath.Join(socketDir, name+".sock"))
-		if err != nil {
-			continue
-		}
+	for _, status := range statuses {
 		if !first {
 			fmt.Fprintln(stdout)
 		}
@@ -57,10 +61,50 @@ func showAll(getStatus statusGetter, socketDir string, stdout io.Writer) error {
 	return nil
 }
 
+func reachableStatuses(
+	getStatus statusGetter,
+	listStatuses statusLister,
+	socketDir string,
+) ([]*controlapiv1.InterfaceStatus, error) {
+	byName := make(map[string]*controlapiv1.InterfaceStatus)
+	if listStatuses != nil {
+		managerSocket := controlapi.ManagerSocketPathIn(socketDir)
+		if _, err := os.Stat(managerSocket); err == nil {
+			statuses, listErr := listStatuses(context.Background(), managerSocket)
+			if listErr != nil {
+				return nil, fmt.Errorf("list manager interfaces through %s: %w", managerSocket, listErr)
+			}
+			for _, status := range statuses {
+				if status != nil && status.GetRef().GetInterfaceName() != "" {
+					byName[status.GetRef().GetInterfaceName()] = status
+				}
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("inspect manager control socket %s: %w", managerSocket, err)
+		}
+	}
+	for _, name := range runInterfaces(socketDir) {
+		status, err := getStatus(context.Background(), filepath.Join(socketDir, name+".sock"), name)
+		if err == nil && status != nil {
+			byName[name] = status
+		}
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	statuses := make([]*controlapiv1.InterfaceStatus, 0, len(names))
+	for _, name := range names {
+		statuses = append(statuses, byName[name])
+	}
+	return statuses, nil
+}
+
 // renderPathMTU is the `wgf show <if> path-mtu` view: one line per peer with
 // the DPLPMTUD state that matters when diagnosing a black-holed path.
-func renderPathMTU(w io.Writer, status *controlapiv1.GetStatusResponse) {
-	fmt.Fprintf(w, "interface: %s\n", status.GetInterfaceName())
+func renderPathMTU(w io.Writer, status *controlapiv1.InterfaceStatus) {
+	fmt.Fprintf(w, "interface: %s\n", status.GetRef().GetInterfaceName())
 
 	for _, peer := range status.GetPeers() {
 		fmt.Fprintf(w, "peer: %s\n", peer.GetPublicKey())
@@ -77,9 +121,9 @@ func renderPathMTU(w io.Writer, status *controlapiv1.GetStatusResponse) {
 
 // renderFragment is the `wgf show <if> fragment` view: the fragmentation and
 // reassembly counters without the peer session details.
-func renderFragment(w io.Writer, status *controlapiv1.GetStatusResponse) {
+func renderFragment(w io.Writer, status *controlapiv1.InterfaceStatus) {
 	counters := status.GetCounters()
-	fmt.Fprintf(w, "interface: %s\n", status.GetInterfaceName())
+	fmt.Fprintf(w, "interface: %s\n", status.GetRef().GetInterfaceName())
 	fmt.Fprintf(w, "  carriers sent: %d\n", counters.GetTxCarriers())
 	fmt.Fprintf(w, "  carriers received: %d\n", counters.GetRxDataCarriers())
 	fmt.Fprintf(w, "  inner packets delivered: %d\n", counters.GetRxInnerDelivered())
@@ -90,9 +134,9 @@ func renderFragment(w io.Writer, status *controlapiv1.GetStatusResponse) {
 
 // renderStats is the `wgf show <if> stats` view: every counter, one per line,
 // in a stable machine-friendly key=value format.
-func renderStats(w io.Writer, status *controlapiv1.GetStatusResponse) {
+func renderStats(w io.Writer, status *controlapiv1.InterfaceStatus) {
 	counters := status.GetCounters()
-	fmt.Fprintf(w, "interface=%s\n", status.GetInterfaceName())
+	fmt.Fprintf(w, "interface=%s\n", status.GetRef().GetInterfaceName())
 	fmt.Fprintf(w, "generation=%d\n", status.GetGeneration())
 	fmt.Fprintf(w, "tx_carriers=%d\n", counters.GetTxCarriers())
 	fmt.Fprintf(w, "tx_packet_drops=%d\n", counters.GetTxPacketDrops())

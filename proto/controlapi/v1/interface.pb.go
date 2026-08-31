@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: controlapi/v1/controlapi.proto
+// source: controlapi/v1/interface.proto
 
 package controlapiv1
 
@@ -53,41 +53,59 @@ func (x PresharedKeyAction) String() string {
 }
 
 func (PresharedKeyAction) Descriptor() protoreflect.EnumDescriptor {
-	return file_controlapi_v1_controlapi_proto_enumTypes[0].Descriptor()
+	return file_controlapi_v1_interface_proto_enumTypes[0].Descriptor()
 }
 
 func (PresharedKeyAction) Type() protoreflect.EnumType {
-	return &file_controlapi_v1_controlapi_proto_enumTypes[0]
+	return &file_controlapi_v1_interface_proto_enumTypes[0]
 }
 
 func (x PresharedKeyAction) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-type GetStatusRequest struct {
-	state                     protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_IncludeSecrets bool                   `protobuf:"varint,1,opt,name=include_secrets,json=includeSecrets"`
-	XXX_raceDetectHookData    protoimpl.RaceDetectHookData
-	XXX_presence              [1]uint32
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+// InterfaceSpec is the complete runtime configuration for one interface.
+// Address and route policy are intentionally managed outside this API.
+type InterfaceSpec struct {
+	state                           protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_InterfaceName        *string                `protobuf:"bytes,1,opt,name=interface_name,json=interfaceName"`
+	xxx_hidden_PrivateKey           []byte                 `protobuf:"bytes,2,opt,name=private_key,json=privateKey"`
+	xxx_hidden_ListenPort           uint32                 `protobuf:"varint,3,opt,name=listen_port,json=listenPort"`
+	xxx_hidden_Mtu                  uint32                 `protobuf:"varint,4,opt,name=mtu"`
+	xxx_hidden_MtuDiscovery         *string                `protobuf:"bytes,5,opt,name=mtu_discovery,json=mtuDiscovery"`
+	xxx_hidden_MinCarrierPayload    uint32                 `protobuf:"varint,6,opt,name=min_carrier_payload,json=minCarrierPayload"`
+	xxx_hidden_MaxCarrierPayload    uint32                 `protobuf:"varint,7,opt,name=max_carrier_payload,json=maxCarrierPayload"`
+	xxx_hidden_ReassemblySlots      uint32                 `protobuf:"varint,8,opt,name=reassembly_slots,json=reassemblySlots"`
+	xxx_hidden_PeerReassemblySlots  uint32                 `protobuf:"varint,9,opt,name=peer_reassembly_slots,json=peerReassemblySlots"`
+	xxx_hidden_ReassemblyLifetimeMs uint32                 `protobuf:"varint,10,opt,name=reassembly_lifetime_ms,json=reassemblyLifetimeMs"`
+	xxx_hidden_Reorder              bool                   `protobuf:"varint,11,opt,name=reorder"`
+	xxx_hidden_ReorderMaxDelayMs    uint32                 `protobuf:"varint,12,opt,name=reorder_max_delay_ms,json=reorderMaxDelayMs"`
+	xxx_hidden_Workers              uint32                 `protobuf:"varint,13,opt,name=workers"`
+	xxx_hidden_TunQueues            uint32                 `protobuf:"varint,14,opt,name=tun_queues,json=tunQueues"`
+	xxx_hidden_SocketBuffer         uint32                 `protobuf:"varint,15,opt,name=socket_buffer,json=socketBuffer"`
+	xxx_hidden_FwMark               uint32                 `protobuf:"varint,16,opt,name=fw_mark,json=fwMark"`
+	xxx_hidden_Peers                *[]*PeerSpec           `protobuf:"bytes,17,rep,name=peers"`
+	XXX_raceDetectHookData          protoimpl.RaceDetectHookData
+	XXX_presence                    [1]uint32
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
-func (x *GetStatusRequest) Reset() {
-	*x = GetStatusRequest{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[0]
+func (x *InterfaceSpec) Reset() {
+	*x = InterfaceSpec{}
+	mi := &file_controlapi_v1_interface_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetStatusRequest) String() string {
+func (x *InterfaceSpec) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetStatusRequest) ProtoMessage() {}
+func (*InterfaceSpec) ProtoMessage() {}
 
-func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[0]
+func (x *InterfaceSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_controlapi_v1_interface_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -98,102 +116,125 @@ func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *GetStatusRequest) GetIncludeSecrets() bool {
+func (x *InterfaceSpec) GetInterfaceName() string {
 	if x != nil {
-		return x.xxx_hidden_IncludeSecrets
-	}
-	return false
-}
-
-func (x *GetStatusRequest) SetIncludeSecrets(v bool) {
-	x.xxx_hidden_IncludeSecrets = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 1)
-}
-
-func (x *GetStatusRequest) HasIncludeSecrets() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
-}
-
-func (x *GetStatusRequest) ClearIncludeSecrets() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_IncludeSecrets = false
-}
-
-type GetStatusRequest_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	// Only the privileged local showconf path sets this flag.
-	IncludeSecrets *bool
-}
-
-func (b0 GetStatusRequest_builder) Build() *GetStatusRequest {
-	m0 := &GetStatusRequest{}
-	b, x := &b0, m0
-	_, _ = b, x
-	if b.IncludeSecrets != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 1)
-		x.xxx_hidden_IncludeSecrets = *b.IncludeSecrets
-	}
-	return m0
-}
-
-// ApplyConfigRequest carries the complete desired peer set. Interface
-// identity (private key, listen port, MTU) cannot change at runtime; requests
-// implying such a change are rejected.
-type ApplyConfigRequest struct {
-	state                         protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_RequestId          []byte                 `protobuf:"bytes,1,opt,name=request_id,json=requestId"`
-	xxx_hidden_ExpectedGeneration uint64                 `protobuf:"varint,2,opt,name=expected_generation,json=expectedGeneration"`
-	xxx_hidden_Peers              *[]*DesiredPeer        `protobuf:"bytes,3,rep,name=peers"`
-	XXX_raceDetectHookData        protoimpl.RaceDetectHookData
-	XXX_presence                  [1]uint32
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
-}
-
-func (x *ApplyConfigRequest) Reset() {
-	*x = ApplyConfigRequest{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ApplyConfigRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ApplyConfigRequest) ProtoMessage() {}
-
-func (x *ApplyConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
+		if x.xxx_hidden_InterfaceName != nil {
+			return *x.xxx_hidden_InterfaceName
 		}
-		return ms
+		return ""
 	}
-	return mi.MessageOf(x)
+	return ""
 }
 
-func (x *ApplyConfigRequest) GetRequestId() []byte {
+func (x *InterfaceSpec) GetPrivateKey() []byte {
 	if x != nil {
-		return x.xxx_hidden_RequestId
+		return x.xxx_hidden_PrivateKey
 	}
 	return nil
 }
 
-func (x *ApplyConfigRequest) GetExpectedGeneration() uint64 {
+func (x *InterfaceSpec) GetListenPort() uint32 {
 	if x != nil {
-		return x.xxx_hidden_ExpectedGeneration
+		return x.xxx_hidden_ListenPort
 	}
 	return 0
 }
 
-func (x *ApplyConfigRequest) GetPeers() []*DesiredPeer {
+func (x *InterfaceSpec) GetMtu() uint32 {
+	if x != nil {
+		return x.xxx_hidden_Mtu
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetMtuDiscovery() string {
+	if x != nil {
+		if x.xxx_hidden_MtuDiscovery != nil {
+			return *x.xxx_hidden_MtuDiscovery
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *InterfaceSpec) GetMinCarrierPayload() uint32 {
+	if x != nil {
+		return x.xxx_hidden_MinCarrierPayload
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetMaxCarrierPayload() uint32 {
+	if x != nil {
+		return x.xxx_hidden_MaxCarrierPayload
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetReassemblySlots() uint32 {
+	if x != nil {
+		return x.xxx_hidden_ReassemblySlots
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetPeerReassemblySlots() uint32 {
+	if x != nil {
+		return x.xxx_hidden_PeerReassemblySlots
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetReassemblyLifetimeMs() uint32 {
+	if x != nil {
+		return x.xxx_hidden_ReassemblyLifetimeMs
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetReorder() bool {
+	if x != nil {
+		return x.xxx_hidden_Reorder
+	}
+	return false
+}
+
+func (x *InterfaceSpec) GetReorderMaxDelayMs() uint32 {
+	if x != nil {
+		return x.xxx_hidden_ReorderMaxDelayMs
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetWorkers() uint32 {
+	if x != nil {
+		return x.xxx_hidden_Workers
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetTunQueues() uint32 {
+	if x != nil {
+		return x.xxx_hidden_TunQueues
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetSocketBuffer() uint32 {
+	if x != nil {
+		return x.xxx_hidden_SocketBuffer
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetFwMark() uint32 {
+	if x != nil {
+		return x.xxx_hidden_FwMark
+	}
+	return 0
+}
+
+func (x *InterfaceSpec) GetPeers() []*PeerSpec {
 	if x != nil {
 		if x.xxx_hidden_Peers != nil {
 			return *x.xxx_hidden_Peers
@@ -202,76 +243,381 @@ func (x *ApplyConfigRequest) GetPeers() []*DesiredPeer {
 	return nil
 }
 
-func (x *ApplyConfigRequest) SetRequestId(v []byte) {
+func (x *InterfaceSpec) SetInterfaceName(v string) {
+	x.xxx_hidden_InterfaceName = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 17)
+}
+
+func (x *InterfaceSpec) SetPrivateKey(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
-	x.xxx_hidden_RequestId = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 3)
+	x.xxx_hidden_PrivateKey = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 17)
 }
 
-func (x *ApplyConfigRequest) SetExpectedGeneration(v uint64) {
-	x.xxx_hidden_ExpectedGeneration = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 3)
+func (x *InterfaceSpec) SetListenPort(v uint32) {
+	x.xxx_hidden_ListenPort = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 17)
 }
 
-func (x *ApplyConfigRequest) SetPeers(v []*DesiredPeer) {
+func (x *InterfaceSpec) SetMtu(v uint32) {
+	x.xxx_hidden_Mtu = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 17)
+}
+
+func (x *InterfaceSpec) SetMtuDiscovery(v string) {
+	x.xxx_hidden_MtuDiscovery = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 17)
+}
+
+func (x *InterfaceSpec) SetMinCarrierPayload(v uint32) {
+	x.xxx_hidden_MinCarrierPayload = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 17)
+}
+
+func (x *InterfaceSpec) SetMaxCarrierPayload(v uint32) {
+	x.xxx_hidden_MaxCarrierPayload = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 17)
+}
+
+func (x *InterfaceSpec) SetReassemblySlots(v uint32) {
+	x.xxx_hidden_ReassemblySlots = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 17)
+}
+
+func (x *InterfaceSpec) SetPeerReassemblySlots(v uint32) {
+	x.xxx_hidden_PeerReassemblySlots = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 17)
+}
+
+func (x *InterfaceSpec) SetReassemblyLifetimeMs(v uint32) {
+	x.xxx_hidden_ReassemblyLifetimeMs = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 17)
+}
+
+func (x *InterfaceSpec) SetReorder(v bool) {
+	x.xxx_hidden_Reorder = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 17)
+}
+
+func (x *InterfaceSpec) SetReorderMaxDelayMs(v uint32) {
+	x.xxx_hidden_ReorderMaxDelayMs = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 17)
+}
+
+func (x *InterfaceSpec) SetWorkers(v uint32) {
+	x.xxx_hidden_Workers = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 17)
+}
+
+func (x *InterfaceSpec) SetTunQueues(v uint32) {
+	x.xxx_hidden_TunQueues = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 17)
+}
+
+func (x *InterfaceSpec) SetSocketBuffer(v uint32) {
+	x.xxx_hidden_SocketBuffer = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 14, 17)
+}
+
+func (x *InterfaceSpec) SetFwMark(v uint32) {
+	x.xxx_hidden_FwMark = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 15, 17)
+}
+
+func (x *InterfaceSpec) SetPeers(v []*PeerSpec) {
 	x.xxx_hidden_Peers = &v
 }
 
-func (x *ApplyConfigRequest) HasRequestId() bool {
+func (x *InterfaceSpec) HasInterfaceName() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
 }
 
-func (x *ApplyConfigRequest) HasExpectedGeneration() bool {
+func (x *InterfaceSpec) HasPrivateKey() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
-func (x *ApplyConfigRequest) ClearRequestId() {
+func (x *InterfaceSpec) HasListenPort() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *InterfaceSpec) HasMtu() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
+func (x *InterfaceSpec) HasMtuDiscovery() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
+}
+
+func (x *InterfaceSpec) HasMinCarrierPayload() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
+}
+
+func (x *InterfaceSpec) HasMaxCarrierPayload() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+}
+
+func (x *InterfaceSpec) HasReassemblySlots() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 7)
+}
+
+func (x *InterfaceSpec) HasPeerReassemblySlots() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 8)
+}
+
+func (x *InterfaceSpec) HasReassemblyLifetimeMs() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 9)
+}
+
+func (x *InterfaceSpec) HasReorder() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 10)
+}
+
+func (x *InterfaceSpec) HasReorderMaxDelayMs() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 11)
+}
+
+func (x *InterfaceSpec) HasWorkers() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 12)
+}
+
+func (x *InterfaceSpec) HasTunQueues() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 13)
+}
+
+func (x *InterfaceSpec) HasSocketBuffer() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 14)
+}
+
+func (x *InterfaceSpec) HasFwMark() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 15)
+}
+
+func (x *InterfaceSpec) ClearInterfaceName() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_RequestId = nil
+	x.xxx_hidden_InterfaceName = nil
 }
 
-func (x *ApplyConfigRequest) ClearExpectedGeneration() {
+func (x *InterfaceSpec) ClearPrivateKey() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
-	x.xxx_hidden_ExpectedGeneration = 0
+	x.xxx_hidden_PrivateKey = nil
 }
 
-type ApplyConfigRequest_builder struct {
+func (x *InterfaceSpec) ClearListenPort() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_ListenPort = 0
+}
+
+func (x *InterfaceSpec) ClearMtu() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_Mtu = 0
+}
+
+func (x *InterfaceSpec) ClearMtuDiscovery() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
+	x.xxx_hidden_MtuDiscovery = nil
+}
+
+func (x *InterfaceSpec) ClearMinCarrierPayload() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
+	x.xxx_hidden_MinCarrierPayload = 0
+}
+
+func (x *InterfaceSpec) ClearMaxCarrierPayload() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+	x.xxx_hidden_MaxCarrierPayload = 0
+}
+
+func (x *InterfaceSpec) ClearReassemblySlots() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 7)
+	x.xxx_hidden_ReassemblySlots = 0
+}
+
+func (x *InterfaceSpec) ClearPeerReassemblySlots() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 8)
+	x.xxx_hidden_PeerReassemblySlots = 0
+}
+
+func (x *InterfaceSpec) ClearReassemblyLifetimeMs() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 9)
+	x.xxx_hidden_ReassemblyLifetimeMs = 0
+}
+
+func (x *InterfaceSpec) ClearReorder() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 10)
+	x.xxx_hidden_Reorder = false
+}
+
+func (x *InterfaceSpec) ClearReorderMaxDelayMs() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 11)
+	x.xxx_hidden_ReorderMaxDelayMs = 0
+}
+
+func (x *InterfaceSpec) ClearWorkers() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 12)
+	x.xxx_hidden_Workers = 0
+}
+
+func (x *InterfaceSpec) ClearTunQueues() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 13)
+	x.xxx_hidden_TunQueues = 0
+}
+
+func (x *InterfaceSpec) ClearSocketBuffer() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 14)
+	x.xxx_hidden_SocketBuffer = 0
+}
+
+func (x *InterfaceSpec) ClearFwMark() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 15)
+	x.xxx_hidden_FwMark = 0
+}
+
+type InterfaceSpec_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// request_id is a client-generated nonzero 16-byte value. Retrying the same
-	// id with the same snapshot returns the cached first result.
-	RequestId []byte
-	// expected_generation guards against concurrent writers; it must match the
-	// generation reported by GetStatus.
-	ExpectedGeneration *uint64
-	Peers              []*DesiredPeer
+	InterfaceName        *string
+	PrivateKey           []byte
+	ListenPort           *uint32
+	Mtu                  *uint32
+	MtuDiscovery         *string
+	MinCarrierPayload    *uint32
+	MaxCarrierPayload    *uint32
+	ReassemblySlots      *uint32
+	PeerReassemblySlots  *uint32
+	ReassemblyLifetimeMs *uint32
+	Reorder              *bool
+	ReorderMaxDelayMs    *uint32
+	Workers              *uint32
+	TunQueues            *uint32
+	SocketBuffer         *uint32
+	FwMark               *uint32
+	Peers                []*PeerSpec
 }
 
-func (b0 ApplyConfigRequest_builder) Build() *ApplyConfigRequest {
-	m0 := &ApplyConfigRequest{}
+func (b0 InterfaceSpec_builder) Build() *InterfaceSpec {
+	m0 := &InterfaceSpec{}
 	b, x := &b0, m0
 	_, _ = b, x
-	if b.RequestId != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 3)
-		x.xxx_hidden_RequestId = b.RequestId
+	if b.InterfaceName != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 17)
+		x.xxx_hidden_InterfaceName = b.InterfaceName
 	}
-	if b.ExpectedGeneration != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 3)
-		x.xxx_hidden_ExpectedGeneration = *b.ExpectedGeneration
+	if b.PrivateKey != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 17)
+		x.xxx_hidden_PrivateKey = b.PrivateKey
+	}
+	if b.ListenPort != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 17)
+		x.xxx_hidden_ListenPort = *b.ListenPort
+	}
+	if b.Mtu != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 17)
+		x.xxx_hidden_Mtu = *b.Mtu
+	}
+	if b.MtuDiscovery != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 17)
+		x.xxx_hidden_MtuDiscovery = b.MtuDiscovery
+	}
+	if b.MinCarrierPayload != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 17)
+		x.xxx_hidden_MinCarrierPayload = *b.MinCarrierPayload
+	}
+	if b.MaxCarrierPayload != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 17)
+		x.xxx_hidden_MaxCarrierPayload = *b.MaxCarrierPayload
+	}
+	if b.ReassemblySlots != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 17)
+		x.xxx_hidden_ReassemblySlots = *b.ReassemblySlots
+	}
+	if b.PeerReassemblySlots != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 17)
+		x.xxx_hidden_PeerReassemblySlots = *b.PeerReassemblySlots
+	}
+	if b.ReassemblyLifetimeMs != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 17)
+		x.xxx_hidden_ReassemblyLifetimeMs = *b.ReassemblyLifetimeMs
+	}
+	if b.Reorder != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 17)
+		x.xxx_hidden_Reorder = *b.Reorder
+	}
+	if b.ReorderMaxDelayMs != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 17)
+		x.xxx_hidden_ReorderMaxDelayMs = *b.ReorderMaxDelayMs
+	}
+	if b.Workers != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 17)
+		x.xxx_hidden_Workers = *b.Workers
+	}
+	if b.TunQueues != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 17)
+		x.xxx_hidden_TunQueues = *b.TunQueues
+	}
+	if b.SocketBuffer != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 14, 17)
+		x.xxx_hidden_SocketBuffer = *b.SocketBuffer
+	}
+	if b.FwMark != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 15, 17)
+		x.xxx_hidden_FwMark = *b.FwMark
 	}
 	x.xxx_hidden_Peers = &b.Peers
 	return m0
 }
 
-type DesiredPeer struct {
+// PeerSpec is one peer in an interface desired state.
+type PeerSpec struct {
 	state                             protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_PublicKey              *string                `protobuf:"bytes,1,opt,name=public_key,json=publicKey"`
 	xxx_hidden_Endpoint               *string                `protobuf:"bytes,2,opt,name=endpoint"`
@@ -286,21 +632,21 @@ type DesiredPeer struct {
 	sizeCache                         protoimpl.SizeCache
 }
 
-func (x *DesiredPeer) Reset() {
-	*x = DesiredPeer{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[2]
+func (x *PeerSpec) Reset() {
+	*x = PeerSpec{}
+	mi := &file_controlapi_v1_interface_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DesiredPeer) String() string {
+func (x *PeerSpec) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DesiredPeer) ProtoMessage() {}
+func (*PeerSpec) ProtoMessage() {}
 
-func (x *DesiredPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[2]
+func (x *PeerSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_controlapi_v1_interface_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -311,7 +657,7 @@ func (x *DesiredPeer) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *DesiredPeer) GetPublicKey() string {
+func (x *PeerSpec) GetPublicKey() string {
 	if x != nil {
 		if x.xxx_hidden_PublicKey != nil {
 			return *x.xxx_hidden_PublicKey
@@ -321,7 +667,7 @@ func (x *DesiredPeer) GetPublicKey() string {
 	return ""
 }
 
-func (x *DesiredPeer) GetEndpoint() string {
+func (x *PeerSpec) GetEndpoint() string {
 	if x != nil {
 		if x.xxx_hidden_Endpoint != nil {
 			return *x.xxx_hidden_Endpoint
@@ -331,28 +677,28 @@ func (x *DesiredPeer) GetEndpoint() string {
 	return ""
 }
 
-func (x *DesiredPeer) GetAllowedIps() []string {
+func (x *PeerSpec) GetAllowedIps() []string {
 	if x != nil {
 		return x.xxx_hidden_AllowedIps
 	}
 	return nil
 }
 
-func (x *DesiredPeer) GetPersistentKeepaliveSec() uint32 {
+func (x *PeerSpec) GetPersistentKeepaliveSec() uint32 {
 	if x != nil {
 		return x.xxx_hidden_PersistentKeepaliveSec
 	}
 	return 0
 }
 
-func (x *DesiredPeer) GetPresharedKey() []byte {
+func (x *PeerSpec) GetPresharedKey() []byte {
 	if x != nil {
 		return x.xxx_hidden_PresharedKey
 	}
 	return nil
 }
 
-func (x *DesiredPeer) GetPresharedKeyAction() PresharedKeyAction {
+func (x *PeerSpec) GetPresharedKeyAction() PresharedKeyAction {
 	if x != nil {
 		if protoimpl.X.Present(&(x.XXX_presence[0]), 5) {
 			return x.xxx_hidden_PresharedKeyAction
@@ -361,7 +707,7 @@ func (x *DesiredPeer) GetPresharedKeyAction() PresharedKeyAction {
 	return PresharedKeyAction_PRESERVE
 }
 
-func (x *DesiredPeer) GetMetricsId() string {
+func (x *PeerSpec) GetMetricsId() string {
 	if x != nil {
 		if x.xxx_hidden_MetricsId != nil {
 			return *x.xxx_hidden_MetricsId
@@ -371,26 +717,26 @@ func (x *DesiredPeer) GetMetricsId() string {
 	return ""
 }
 
-func (x *DesiredPeer) SetPublicKey(v string) {
+func (x *PeerSpec) SetPublicKey(v string) {
 	x.xxx_hidden_PublicKey = &v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
 }
 
-func (x *DesiredPeer) SetEndpoint(v string) {
+func (x *PeerSpec) SetEndpoint(v string) {
 	x.xxx_hidden_Endpoint = &v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
 }
 
-func (x *DesiredPeer) SetAllowedIps(v []string) {
+func (x *PeerSpec) SetAllowedIps(v []string) {
 	x.xxx_hidden_AllowedIps = v
 }
 
-func (x *DesiredPeer) SetPersistentKeepaliveSec(v uint32) {
+func (x *PeerSpec) SetPersistentKeepaliveSec(v uint32) {
 	x.xxx_hidden_PersistentKeepaliveSec = v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
 }
 
-func (x *DesiredPeer) SetPresharedKey(v []byte) {
+func (x *PeerSpec) SetPresharedKey(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
@@ -398,106 +744,102 @@ func (x *DesiredPeer) SetPresharedKey(v []byte) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 7)
 }
 
-func (x *DesiredPeer) SetPresharedKeyAction(v PresharedKeyAction) {
+func (x *PeerSpec) SetPresharedKeyAction(v PresharedKeyAction) {
 	x.xxx_hidden_PresharedKeyAction = v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 7)
 }
 
-func (x *DesiredPeer) SetMetricsId(v string) {
+func (x *PeerSpec) SetMetricsId(v string) {
 	x.xxx_hidden_MetricsId = &v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
 }
 
-func (x *DesiredPeer) HasPublicKey() bool {
+func (x *PeerSpec) HasPublicKey() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
 }
 
-func (x *DesiredPeer) HasEndpoint() bool {
+func (x *PeerSpec) HasEndpoint() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
-func (x *DesiredPeer) HasPersistentKeepaliveSec() bool {
+func (x *PeerSpec) HasPersistentKeepaliveSec() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
 }
 
-func (x *DesiredPeer) HasPresharedKey() bool {
+func (x *PeerSpec) HasPresharedKey() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
 }
 
-func (x *DesiredPeer) HasPresharedKeyAction() bool {
+func (x *PeerSpec) HasPresharedKeyAction() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
 }
 
-func (x *DesiredPeer) HasMetricsId() bool {
+func (x *PeerSpec) HasMetricsId() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
 }
 
-func (x *DesiredPeer) ClearPublicKey() {
+func (x *PeerSpec) ClearPublicKey() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_PublicKey = nil
 }
 
-func (x *DesiredPeer) ClearEndpoint() {
+func (x *PeerSpec) ClearEndpoint() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
 	x.xxx_hidden_Endpoint = nil
 }
 
-func (x *DesiredPeer) ClearPersistentKeepaliveSec() {
+func (x *PeerSpec) ClearPersistentKeepaliveSec() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
 	x.xxx_hidden_PersistentKeepaliveSec = 0
 }
 
-func (x *DesiredPeer) ClearPresharedKey() {
+func (x *PeerSpec) ClearPresharedKey() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
 	x.xxx_hidden_PresharedKey = nil
 }
 
-func (x *DesiredPeer) ClearPresharedKeyAction() {
+func (x *PeerSpec) ClearPresharedKeyAction() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
 	x.xxx_hidden_PresharedKeyAction = PresharedKeyAction_PRESERVE
 }
 
-func (x *DesiredPeer) ClearMetricsId() {
+func (x *PeerSpec) ClearMetricsId() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
 	x.xxx_hidden_MetricsId = nil
 }
 
-type DesiredPeer_builder struct {
+type PeerSpec_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	PublicKey              *string
 	Endpoint               *string
 	AllowedIps             []string
 	PersistentKeepaliveSec *uint32
-	// Raw 32-byte key. The action controls whether an omitted key is preserved
-	// or cleared during a peer-set update.
-	PresharedKey       []byte
-	PresharedKeyAction *PresharedKeyAction
-	// Optional stable identifier exposed only in metrics labels. An empty value
-	// selects the deterministic public-key-derived identifier.
-	MetricsId *string
+	PresharedKey           []byte
+	PresharedKeyAction     *PresharedKeyAction
+	MetricsId              *string
 }
 
-func (b0 DesiredPeer_builder) Build() *DesiredPeer {
-	m0 := &DesiredPeer{}
+func (b0 PeerSpec_builder) Build() *PeerSpec {
+	m0 := &PeerSpec{}
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.PublicKey != nil {
@@ -528,31 +870,41 @@ func (b0 DesiredPeer_builder) Build() *DesiredPeer {
 	return m0
 }
 
-type ApplyConfigResponse struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Generation  uint64                 `protobuf:"varint,1,opt,name=generation"`
-	xxx_hidden_Results     *[]*PeerResult         `protobuf:"bytes,2,rep,name=results"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+// InterfaceStatus is the observable state of one interface.
+type InterfaceStatus struct {
+	state                          protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Ref                 *InterfaceRef          `protobuf:"bytes,1,opt,name=ref"`
+	xxx_hidden_Lifecycle           InterfaceLifecycle     `protobuf:"varint,2,opt,name=lifecycle,enum=wgf.controlapi.v1.InterfaceLifecycle"`
+	xxx_hidden_LifecycleError      *string                `protobuf:"bytes,3,opt,name=lifecycle_error,json=lifecycleError"`
+	xxx_hidden_PublicKey           *string                `protobuf:"bytes,4,opt,name=public_key,json=publicKey"`
+	xxx_hidden_ListenPort          uint32                 `protobuf:"varint,5,opt,name=listen_port,json=listenPort"`
+	xxx_hidden_Mtu                 uint32                 `protobuf:"varint,6,opt,name=mtu"`
+	xxx_hidden_Counters            *ShimCounters          `protobuf:"bytes,7,opt,name=counters"`
+	xxx_hidden_Peers               *[]*PeerStatus         `protobuf:"bytes,8,rep,name=peers"`
+	xxx_hidden_Generation          uint64                 `protobuf:"varint,9,opt,name=generation"`
+	xxx_hidden_Spec                *InterfaceSpec         `protobuf:"bytes,10,opt,name=spec"`
+	xxx_hidden_NativeInterfaceName *string                `protobuf:"bytes,11,opt,name=native_interface_name,json=nativeInterfaceName"`
+	XXX_raceDetectHookData         protoimpl.RaceDetectHookData
+	XXX_presence                   [1]uint32
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
-func (x *ApplyConfigResponse) Reset() {
-	*x = ApplyConfigResponse{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[3]
+func (x *InterfaceStatus) Reset() {
+	*x = InterfaceStatus{}
+	mi := &file_controlapi_v1_interface_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ApplyConfigResponse) String() string {
+func (x *InterfaceStatus) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ApplyConfigResponse) ProtoMessage() {}
+func (*InterfaceStatus) ProtoMessage() {}
 
-func (x *ApplyConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[3]
+func (x *InterfaceStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_controlapi_v1_interface_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,98 +915,33 @@ func (x *ApplyConfigResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *ApplyConfigResponse) GetGeneration() uint64 {
+func (x *InterfaceStatus) GetRef() *InterfaceRef {
 	if x != nil {
-		return x.xxx_hidden_Generation
-	}
-	return 0
-}
-
-func (x *ApplyConfigResponse) GetResults() []*PeerResult {
-	if x != nil {
-		if x.xxx_hidden_Results != nil {
-			return *x.xxx_hidden_Results
-		}
+		return x.xxx_hidden_Ref
 	}
 	return nil
 }
 
-func (x *ApplyConfigResponse) SetGeneration(v uint64) {
-	x.xxx_hidden_Generation = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 2)
-}
-
-func (x *ApplyConfigResponse) SetResults(v []*PeerResult) {
-	x.xxx_hidden_Results = &v
-}
-
-func (x *ApplyConfigResponse) HasGeneration() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
-}
-
-func (x *ApplyConfigResponse) ClearGeneration() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_Generation = 0
-}
-
-type ApplyConfigResponse_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	Generation *uint64
-	Results    []*PeerResult
-}
-
-func (b0 ApplyConfigResponse_builder) Build() *ApplyConfigResponse {
-	m0 := &ApplyConfigResponse{}
-	b, x := &b0, m0
-	_, _ = b, x
-	if b.Generation != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 2)
-		x.xxx_hidden_Generation = *b.Generation
-	}
-	x.xxx_hidden_Results = &b.Results
-	return m0
-}
-
-type PeerResult struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_PublicKey   *string                `protobuf:"bytes,1,opt,name=public_key,json=publicKey"`
-	xxx_hidden_Error       *string                `protobuf:"bytes,2,opt,name=error"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
-}
-
-func (x *PeerResult) Reset() {
-	*x = PeerResult{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PeerResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PeerResult) ProtoMessage() {}
-
-func (x *PeerResult) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[4]
+func (x *InterfaceStatus) GetLifecycle() InterfaceLifecycle {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 1) {
+			return x.xxx_hidden_Lifecycle
 		}
-		return ms
 	}
-	return mi.MessageOf(x)
+	return InterfaceLifecycle_INTERFACE_LIFECYCLE_UNSPECIFIED
 }
 
-func (x *PeerResult) GetPublicKey() string {
+func (x *InterfaceStatus) GetLifecycleError() string {
+	if x != nil {
+		if x.xxx_hidden_LifecycleError != nil {
+			return *x.xxx_hidden_LifecycleError
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *InterfaceStatus) GetPublicKey() string {
 	if x != nil {
 		if x.xxx_hidden_PublicKey != nil {
 			return *x.xxx_hidden_PublicKey
@@ -664,156 +951,28 @@ func (x *PeerResult) GetPublicKey() string {
 	return ""
 }
 
-func (x *PeerResult) GetError() string {
-	if x != nil {
-		if x.xxx_hidden_Error != nil {
-			return *x.xxx_hidden_Error
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *PeerResult) SetPublicKey(v string) {
-	x.xxx_hidden_PublicKey = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 2)
-}
-
-func (x *PeerResult) SetError(v string) {
-	x.xxx_hidden_Error = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 2)
-}
-
-func (x *PeerResult) HasPublicKey() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
-}
-
-func (x *PeerResult) HasError() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
-}
-
-func (x *PeerResult) ClearPublicKey() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_PublicKey = nil
-}
-
-func (x *PeerResult) ClearError() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
-	x.xxx_hidden_Error = nil
-}
-
-type PeerResult_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	PublicKey *string
-	// error is empty on success. A failed peer stays fail-closed rather than
-	// reverting to its previous state.
-	Error *string
-}
-
-func (b0 PeerResult_builder) Build() *PeerResult {
-	m0 := &PeerResult{}
-	b, x := &b0, m0
-	_, _ = b, x
-	if b.PublicKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 2)
-		x.xxx_hidden_PublicKey = b.PublicKey
-	}
-	if b.Error != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 2)
-		x.xxx_hidden_Error = b.Error
-	}
-	return m0
-}
-
-type GetStatusResponse struct {
-	state                    protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_InterfaceName *string                `protobuf:"bytes,1,opt,name=interface_name,json=interfaceName"`
-	xxx_hidden_PublicKey     *string                `protobuf:"bytes,2,opt,name=public_key,json=publicKey"`
-	xxx_hidden_ListenPort    uint32                 `protobuf:"varint,3,opt,name=listen_port,json=listenPort"`
-	xxx_hidden_Mtu           uint32                 `protobuf:"varint,4,opt,name=mtu"`
-	xxx_hidden_Counters      *ShimCounters          `protobuf:"bytes,6,opt,name=counters"`
-	xxx_hidden_Peers         *[]*PeerStatus         `protobuf:"bytes,7,rep,name=peers"`
-	xxx_hidden_Generation    uint64                 `protobuf:"varint,9,opt,name=generation"`
-	XXX_raceDetectHookData   protoimpl.RaceDetectHookData
-	XXX_presence             [1]uint32
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
-}
-
-func (x *GetStatusResponse) Reset() {
-	*x = GetStatusResponse{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetStatusResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetStatusResponse) ProtoMessage() {}
-
-func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-func (x *GetStatusResponse) GetInterfaceName() string {
-	if x != nil {
-		if x.xxx_hidden_InterfaceName != nil {
-			return *x.xxx_hidden_InterfaceName
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *GetStatusResponse) GetPublicKey() string {
-	if x != nil {
-		if x.xxx_hidden_PublicKey != nil {
-			return *x.xxx_hidden_PublicKey
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *GetStatusResponse) GetListenPort() uint32 {
+func (x *InterfaceStatus) GetListenPort() uint32 {
 	if x != nil {
 		return x.xxx_hidden_ListenPort
 	}
 	return 0
 }
 
-func (x *GetStatusResponse) GetMtu() uint32 {
+func (x *InterfaceStatus) GetMtu() uint32 {
 	if x != nil {
 		return x.xxx_hidden_Mtu
 	}
 	return 0
 }
 
-func (x *GetStatusResponse) GetCounters() *ShimCounters {
+func (x *InterfaceStatus) GetCounters() *ShimCounters {
 	if x != nil {
 		return x.xxx_hidden_Counters
 	}
 	return nil
 }
 
-func (x *GetStatusResponse) GetPeers() []*PeerStatus {
+func (x *InterfaceStatus) GetPeers() []*PeerStatus {
 	if x != nil {
 		if x.xxx_hidden_Peers != nil {
 			return *x.xxx_hidden_Peers
@@ -822,156 +981,253 @@ func (x *GetStatusResponse) GetPeers() []*PeerStatus {
 	return nil
 }
 
-func (x *GetStatusResponse) GetGeneration() uint64 {
+func (x *InterfaceStatus) GetGeneration() uint64 {
 	if x != nil {
 		return x.xxx_hidden_Generation
 	}
 	return 0
 }
 
-func (x *GetStatusResponse) SetInterfaceName(v string) {
-	x.xxx_hidden_InterfaceName = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
+func (x *InterfaceStatus) GetSpec() *InterfaceSpec {
+	if x != nil {
+		return x.xxx_hidden_Spec
+	}
+	return nil
 }
 
-func (x *GetStatusResponse) SetPublicKey(v string) {
+func (x *InterfaceStatus) GetNativeInterfaceName() string {
+	if x != nil {
+		if x.xxx_hidden_NativeInterfaceName != nil {
+			return *x.xxx_hidden_NativeInterfaceName
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *InterfaceStatus) SetRef(v *InterfaceRef) {
+	x.xxx_hidden_Ref = v
+}
+
+func (x *InterfaceStatus) SetLifecycle(v InterfaceLifecycle) {
+	x.xxx_hidden_Lifecycle = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 11)
+}
+
+func (x *InterfaceStatus) SetLifecycleError(v string) {
+	x.xxx_hidden_LifecycleError = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 11)
+}
+
+func (x *InterfaceStatus) SetPublicKey(v string) {
 	x.xxx_hidden_PublicKey = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 11)
 }
 
-func (x *GetStatusResponse) SetListenPort(v uint32) {
+func (x *InterfaceStatus) SetListenPort(v uint32) {
 	x.xxx_hidden_ListenPort = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 7)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 11)
 }
 
-func (x *GetStatusResponse) SetMtu(v uint32) {
+func (x *InterfaceStatus) SetMtu(v uint32) {
 	x.xxx_hidden_Mtu = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 11)
 }
 
-func (x *GetStatusResponse) SetCounters(v *ShimCounters) {
+func (x *InterfaceStatus) SetCounters(v *ShimCounters) {
 	x.xxx_hidden_Counters = v
 }
 
-func (x *GetStatusResponse) SetPeers(v []*PeerStatus) {
+func (x *InterfaceStatus) SetPeers(v []*PeerStatus) {
 	x.xxx_hidden_Peers = &v
 }
 
-func (x *GetStatusResponse) SetGeneration(v uint64) {
+func (x *InterfaceStatus) SetGeneration(v uint64) {
 	x.xxx_hidden_Generation = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 11)
 }
 
-func (x *GetStatusResponse) HasInterfaceName() bool {
+func (x *InterfaceStatus) SetSpec(v *InterfaceSpec) {
+	x.xxx_hidden_Spec = v
+}
+
+func (x *InterfaceStatus) SetNativeInterfaceName(v string) {
+	x.xxx_hidden_NativeInterfaceName = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 11)
+}
+
+func (x *InterfaceStatus) HasRef() bool {
 	if x == nil {
 		return false
 	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+	return x.xxx_hidden_Ref != nil
 }
 
-func (x *GetStatusResponse) HasPublicKey() bool {
+func (x *InterfaceStatus) HasLifecycle() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
-func (x *GetStatusResponse) HasListenPort() bool {
+func (x *InterfaceStatus) HasLifecycleError() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
 }
 
-func (x *GetStatusResponse) HasMtu() bool {
+func (x *InterfaceStatus) HasPublicKey() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
 }
 
-func (x *GetStatusResponse) HasCounters() bool {
+func (x *InterfaceStatus) HasListenPort() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
+}
+
+func (x *InterfaceStatus) HasMtu() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
+}
+
+func (x *InterfaceStatus) HasCounters() bool {
 	if x == nil {
 		return false
 	}
 	return x.xxx_hidden_Counters != nil
 }
 
-func (x *GetStatusResponse) HasGeneration() bool {
+func (x *InterfaceStatus) HasGeneration() bool {
 	if x == nil {
 		return false
 	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 8)
 }
 
-func (x *GetStatusResponse) ClearInterfaceName() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_InterfaceName = nil
+func (x *InterfaceStatus) HasSpec() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Spec != nil
 }
 
-func (x *GetStatusResponse) ClearPublicKey() {
+func (x *InterfaceStatus) HasNativeInterfaceName() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 10)
+}
+
+func (x *InterfaceStatus) ClearRef() {
+	x.xxx_hidden_Ref = nil
+}
+
+func (x *InterfaceStatus) ClearLifecycle() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Lifecycle = InterfaceLifecycle_INTERFACE_LIFECYCLE_UNSPECIFIED
+}
+
+func (x *InterfaceStatus) ClearLifecycleError() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_LifecycleError = nil
+}
+
+func (x *InterfaceStatus) ClearPublicKey() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
 	x.xxx_hidden_PublicKey = nil
 }
 
-func (x *GetStatusResponse) ClearListenPort() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+func (x *InterfaceStatus) ClearListenPort() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
 	x.xxx_hidden_ListenPort = 0
 }
 
-func (x *GetStatusResponse) ClearMtu() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+func (x *InterfaceStatus) ClearMtu() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
 	x.xxx_hidden_Mtu = 0
 }
 
-func (x *GetStatusResponse) ClearCounters() {
+func (x *InterfaceStatus) ClearCounters() {
 	x.xxx_hidden_Counters = nil
 }
 
-func (x *GetStatusResponse) ClearGeneration() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+func (x *InterfaceStatus) ClearGeneration() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 8)
 	x.xxx_hidden_Generation = 0
 }
 
-type GetStatusResponse_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	InterfaceName *string
-	PublicKey     *string
-	ListenPort    *uint32
-	Mtu           *uint32
-	Counters      *ShimCounters
-	Peers         []*PeerStatus
-	// generation increments on every applied configuration change and gates
-	// ApplyConfig.expected_generation.
-	Generation *uint64
+func (x *InterfaceStatus) ClearSpec() {
+	x.xxx_hidden_Spec = nil
 }
 
-func (b0 GetStatusResponse_builder) Build() *GetStatusResponse {
-	m0 := &GetStatusResponse{}
+func (x *InterfaceStatus) ClearNativeInterfaceName() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 10)
+	x.xxx_hidden_NativeInterfaceName = nil
+}
+
+type InterfaceStatus_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Ref            *InterfaceRef
+	Lifecycle      *InterfaceLifecycle
+	LifecycleError *string
+	PublicKey      *string
+	ListenPort     *uint32
+	Mtu            *uint32
+	Counters       *ShimCounters
+	Peers          []*PeerStatus
+	Generation     *uint64
+	// spec is the current non-secret desired state. Private keys are never
+	// returned; RestartInterface preserves the current private key when omitted.
+	Spec *InterfaceSpec
+	// native_interface_name is the OS TUN name. It can differ from the managed
+	// interface name, notably when macOS allocates a utunN device.
+	NativeInterfaceName *string
+}
+
+func (b0 InterfaceStatus_builder) Build() *InterfaceStatus {
+	m0 := &InterfaceStatus{}
 	b, x := &b0, m0
 	_, _ = b, x
-	if b.InterfaceName != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 7)
-		x.xxx_hidden_InterfaceName = b.InterfaceName
+	x.xxx_hidden_Ref = b.Ref
+	if b.Lifecycle != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 11)
+		x.xxx_hidden_Lifecycle = *b.Lifecycle
+	}
+	if b.LifecycleError != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 11)
+		x.xxx_hidden_LifecycleError = b.LifecycleError
 	}
 	if b.PublicKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 7)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 11)
 		x.xxx_hidden_PublicKey = b.PublicKey
 	}
 	if b.ListenPort != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 7)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 11)
 		x.xxx_hidden_ListenPort = *b.ListenPort
 	}
 	if b.Mtu != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 7)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 11)
 		x.xxx_hidden_Mtu = *b.Mtu
 	}
 	x.xxx_hidden_Counters = b.Counters
 	x.xxx_hidden_Peers = &b.Peers
 	if b.Generation != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 7)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 11)
 		x.xxx_hidden_Generation = *b.Generation
+	}
+	x.xxx_hidden_Spec = b.Spec
+	if b.NativeInterfaceName != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 11)
+		x.xxx_hidden_NativeInterfaceName = b.NativeInterfaceName
 	}
 	return m0
 }
@@ -1000,7 +1256,7 @@ type PeerStatus struct {
 
 func (x *PeerStatus) Reset() {
 	*x = PeerStatus{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[6]
+	mi := &file_controlapi_v1_interface_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1012,7 +1268,7 @@ func (x *PeerStatus) String() string {
 func (*PeerStatus) ProtoMessage() {}
 
 func (x *PeerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[6]
+	mi := &file_controlapi_v1_interface_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1367,30 +1623,20 @@ func (x *PeerStatus) ClearMetricsId() {
 type PeerStatus_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	PublicKey              *string
-	Endpoint               *string
-	AllowedIps             []string
-	LastHandshakeUnix      *int64
-	TransferRxBytes        *uint64
-	TransferTxBytes        *uint64
-	PersistentKeepaliveSec *uint32
-	// WGF extensions.
+	PublicKey               *string
+	Endpoint                *string
+	AllowedIps              []string
+	LastHandshakeUnix       *int64
+	TransferRxBytes         *uint64
+	TransferTxBytes         *uint64
+	PersistentKeepaliveSec  *uint32
 	ConfirmedCarrierPayload *uint32
 	PmtuSearching           *bool
-	// data_ready is true when every CONTROL gate has confirmed and outbound
-	// DATA is enabled for this peer.
-	DataReady *bool
-	// Stable local CONTROL path status (for example BASE, SEARCHING,
-	// SEARCH_COMPLETE, or ERROR).
-	ControlPathState *string
-	// Stable diagnostic reason when control_path_state is ERROR.
-	ControlPathError *string
-	// Present only on the owner-controlled local socket so set/showconf can
-	// preserve a configured key; the normal show renderer does not print it.
-	PresharedKey []byte
-	// The explicitly configured metrics identifier, if any. It is included so
-	// showconf and config updates preserve WGFPeerID exactly.
-	MetricsId *string
+	DataReady               *bool
+	ControlPathState        *string
+	ControlPathError        *string
+	PresharedKey            []byte
+	MetricsId               *string
 }
 
 func (b0 PeerStatus_builder) Build() *PeerStatus {
@@ -1475,6 +1721,8 @@ type ShimCounters struct {
 	xxx_hidden_UdpSocketDrops                 uint64                 `protobuf:"varint,12,opt,name=udp_socket_drops,json=udpSocketDrops"`
 	xxx_hidden_ControlQueueDrops              uint64                 `protobuf:"varint,19,opt,name=control_queue_drops,json=controlQueueDrops"`
 	xxx_hidden_ControlMaterializationDrops    uint64                 `protobuf:"varint,20,opt,name=control_materialization_drops,json=controlMaterializationDrops"`
+	xxx_hidden_TxNativeFragmentDrops          uint64                 `protobuf:"varint,21,opt,name=tx_native_fragment_drops,json=txNativeFragmentDrops"`
+	xxx_hidden_RxNativeFragmentDrops          uint64                 `protobuf:"varint,22,opt,name=rx_native_fragment_drops,json=rxNativeFragmentDrops"`
 	XXX_raceDetectHookData                    protoimpl.RaceDetectHookData
 	XXX_presence                              [1]uint32
 	unknownFields                             protoimpl.UnknownFields
@@ -1483,7 +1731,7 @@ type ShimCounters struct {
 
 func (x *ShimCounters) Reset() {
 	*x = ShimCounters{}
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[7]
+	mi := &file_controlapi_v1_interface_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1495,7 +1743,7 @@ func (x *ShimCounters) String() string {
 func (*ShimCounters) ProtoMessage() {}
 
 func (x *ShimCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_controlapi_v1_controlapi_proto_msgTypes[7]
+	mi := &file_controlapi_v1_interface_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1646,104 +1894,128 @@ func (x *ShimCounters) GetControlMaterializationDrops() uint64 {
 	return 0
 }
 
+func (x *ShimCounters) GetTxNativeFragmentDrops() uint64 {
+	if x != nil {
+		return x.xxx_hidden_TxNativeFragmentDrops
+	}
+	return 0
+}
+
+func (x *ShimCounters) GetRxNativeFragmentDrops() uint64 {
+	if x != nil {
+		return x.xxx_hidden_RxNativeFragmentDrops
+	}
+	return 0
+}
+
 func (x *ShimCounters) SetTxCarriers(v uint64) {
 	x.xxx_hidden_TxCarriers = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 22)
 }
 
 func (x *ShimCounters) SetTxPacketDrops(v uint64) {
 	x.xxx_hidden_TxPacketDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 22)
 }
 
 func (x *ShimCounters) SetTxRouteDrops(v uint64) {
 	x.xxx_hidden_TxRouteDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 22)
 }
 
 func (x *ShimCounters) SetTxPeerMtuDrops(v uint64) {
 	x.xxx_hidden_TxPeerMtuDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 22)
 }
 
 func (x *ShimCounters) SetTxPtbSent(v uint64) {
 	x.xxx_hidden_TxPtbSent = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 22)
 }
 
 func (x *ShimCounters) SetControlExploratoryEvictions(v uint64) {
 	x.xxx_hidden_ControlExploratoryEvictions = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 22)
 }
 
 func (x *ShimCounters) SetControlCoalesces(v uint64) {
 	x.xxx_hidden_ControlCoalesces = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 22)
 }
 
 func (x *ShimCounters) SetControlRateSuppressionEpisodes(v uint64) {
 	x.xxx_hidden_ControlRateSuppressionEpisodes = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 22)
 }
 
 func (x *ShimCounters) SetControlIngressRateLimited(v uint64) {
 	x.xxx_hidden_ControlIngressRateLimited = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 22)
 }
 
 func (x *ShimCounters) SetRxDataCarriers(v uint64) {
 	x.xxx_hidden_RxDataCarriers = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 22)
 }
 
 func (x *ShimCounters) SetRxInnerDelivered(v uint64) {
 	x.xxx_hidden_RxInnerDelivered = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 22)
 }
 
 func (x *ShimCounters) SetRxPacketRejects(v uint64) {
 	x.xxx_hidden_RxPacketRejects = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 22)
 }
 
 func (x *ShimCounters) SetRxSourceSpoofDrops(v uint64) {
 	x.xxx_hidden_RxSourceSpoofDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 22)
 }
 
 func (x *ShimCounters) SetRxNativeWriteDrops(v uint64) {
 	x.xxx_hidden_RxNativeWriteDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 22)
 }
 
 func (x *ShimCounters) SetCarrierQueueOverflows(v uint64) {
 	x.xxx_hidden_CarrierQueueOverflows = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 14, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 14, 22)
 }
 
 func (x *ShimCounters) SetPreconfirmDrops(v uint64) {
 	x.xxx_hidden_PreconfirmDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 15, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 15, 22)
 }
 
 func (x *ShimCounters) SetReassemblyExpirations(v uint64) {
 	x.xxx_hidden_ReassemblyExpirations = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 16, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 16, 22)
 }
 
 func (x *ShimCounters) SetUdpSocketDrops(v uint64) {
 	x.xxx_hidden_UdpSocketDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 17, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 17, 22)
 }
 
 func (x *ShimCounters) SetControlQueueDrops(v uint64) {
 	x.xxx_hidden_ControlQueueDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 18, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 18, 22)
 }
 
 func (x *ShimCounters) SetControlMaterializationDrops(v uint64) {
 	x.xxx_hidden_ControlMaterializationDrops = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 19, 20)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 19, 22)
+}
+
+func (x *ShimCounters) SetTxNativeFragmentDrops(v uint64) {
+	x.xxx_hidden_TxNativeFragmentDrops = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 20, 22)
+}
+
+func (x *ShimCounters) SetRxNativeFragmentDrops(v uint64) {
+	x.xxx_hidden_RxNativeFragmentDrops = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 21, 22)
 }
 
 func (x *ShimCounters) HasTxCarriers() bool {
@@ -1886,6 +2158,20 @@ func (x *ShimCounters) HasControlMaterializationDrops() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 19)
 }
 
+func (x *ShimCounters) HasTxNativeFragmentDrops() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 20)
+}
+
+func (x *ShimCounters) HasRxNativeFragmentDrops() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 21)
+}
+
 func (x *ShimCounters) ClearTxCarriers() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_TxCarriers = 0
@@ -1986,6 +2272,16 @@ func (x *ShimCounters) ClearControlMaterializationDrops() {
 	x.xxx_hidden_ControlMaterializationDrops = 0
 }
 
+func (x *ShimCounters) ClearTxNativeFragmentDrops() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 20)
+	x.xxx_hidden_TxNativeFragmentDrops = 0
+}
+
+func (x *ShimCounters) ClearRxNativeFragmentDrops() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 21)
+	x.xxx_hidden_RxNativeFragmentDrops = 0
+}
+
 type ShimCounters_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -2009,6 +2305,8 @@ type ShimCounters_builder struct {
 	UdpSocketDrops                 *uint64
 	ControlQueueDrops              *uint64
 	ControlMaterializationDrops    *uint64
+	TxNativeFragmentDrops          *uint64
+	RxNativeFragmentDrops          *uint64
 }
 
 func (b0 ShimCounters_builder) Build() *ShimCounters {
@@ -2016,101 +2314,124 @@ func (b0 ShimCounters_builder) Build() *ShimCounters {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.TxCarriers != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 22)
 		x.xxx_hidden_TxCarriers = *b.TxCarriers
 	}
 	if b.TxPacketDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 22)
 		x.xxx_hidden_TxPacketDrops = *b.TxPacketDrops
 	}
 	if b.TxRouteDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 22)
 		x.xxx_hidden_TxRouteDrops = *b.TxRouteDrops
 	}
 	if b.TxPeerMtuDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 22)
 		x.xxx_hidden_TxPeerMtuDrops = *b.TxPeerMtuDrops
 	}
 	if b.TxPtbSent != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 22)
 		x.xxx_hidden_TxPtbSent = *b.TxPtbSent
 	}
 	if b.ControlExploratoryEvictions != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 22)
 		x.xxx_hidden_ControlExploratoryEvictions = *b.ControlExploratoryEvictions
 	}
 	if b.ControlCoalesces != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 22)
 		x.xxx_hidden_ControlCoalesces = *b.ControlCoalesces
 	}
 	if b.ControlRateSuppressionEpisodes != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 22)
 		x.xxx_hidden_ControlRateSuppressionEpisodes = *b.ControlRateSuppressionEpisodes
 	}
 	if b.ControlIngressRateLimited != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 22)
 		x.xxx_hidden_ControlIngressRateLimited = *b.ControlIngressRateLimited
 	}
 	if b.RxDataCarriers != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 22)
 		x.xxx_hidden_RxDataCarriers = *b.RxDataCarriers
 	}
 	if b.RxInnerDelivered != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 22)
 		x.xxx_hidden_RxInnerDelivered = *b.RxInnerDelivered
 	}
 	if b.RxPacketRejects != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 22)
 		x.xxx_hidden_RxPacketRejects = *b.RxPacketRejects
 	}
 	if b.RxSourceSpoofDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 22)
 		x.xxx_hidden_RxSourceSpoofDrops = *b.RxSourceSpoofDrops
 	}
 	if b.RxNativeWriteDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 22)
 		x.xxx_hidden_RxNativeWriteDrops = *b.RxNativeWriteDrops
 	}
 	if b.CarrierQueueOverflows != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 14, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 14, 22)
 		x.xxx_hidden_CarrierQueueOverflows = *b.CarrierQueueOverflows
 	}
 	if b.PreconfirmDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 15, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 15, 22)
 		x.xxx_hidden_PreconfirmDrops = *b.PreconfirmDrops
 	}
 	if b.ReassemblyExpirations != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 16, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 16, 22)
 		x.xxx_hidden_ReassemblyExpirations = *b.ReassemblyExpirations
 	}
 	if b.UdpSocketDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 17, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 17, 22)
 		x.xxx_hidden_UdpSocketDrops = *b.UdpSocketDrops
 	}
 	if b.ControlQueueDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 18, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 18, 22)
 		x.xxx_hidden_ControlQueueDrops = *b.ControlQueueDrops
 	}
 	if b.ControlMaterializationDrops != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 19, 20)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 19, 22)
 		x.xxx_hidden_ControlMaterializationDrops = *b.ControlMaterializationDrops
+	}
+	if b.TxNativeFragmentDrops != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 20, 22)
+		x.xxx_hidden_TxNativeFragmentDrops = *b.TxNativeFragmentDrops
+	}
+	if b.RxNativeFragmentDrops != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 21, 22)
+		x.xxx_hidden_RxNativeFragmentDrops = *b.RxNativeFragmentDrops
 	}
 	return m0
 }
 
-var File_controlapi_v1_controlapi_proto protoreflect.FileDescriptor
+var File_controlapi_v1_interface_proto protoreflect.FileDescriptor
 
-const file_controlapi_v1_controlapi_proto_rawDesc = "" +
+const file_controlapi_v1_interface_proto_rawDesc = "" +
 	"\n" +
-	"\x1econtrolapi/v1/controlapi.proto\x12\x11wgf.controlapi.v1\";\n" +
-	"\x10GetStatusRequest\x12'\n" +
-	"\x0finclude_secrets\x18\x01 \x01(\bR\x0eincludeSecrets\"\x9a\x01\n" +
-	"\x12ApplyConfigRequest\x12\x1d\n" +
+	"\x1dcontrolapi/v1/interface.proto\x12\x11wgf.controlapi.v1\x1a\x1acontrolapi/v1/common.proto\"\x99\x05\n" +
+	"\rInterfaceSpec\x12%\n" +
+	"\x0einterface_name\x18\x01 \x01(\tR\rinterfaceName\x12\x1f\n" +
+	"\vprivate_key\x18\x02 \x01(\fR\n" +
+	"privateKey\x12\x1f\n" +
+	"\vlisten_port\x18\x03 \x01(\rR\n" +
+	"listenPort\x12\x10\n" +
+	"\x03mtu\x18\x04 \x01(\rR\x03mtu\x12#\n" +
+	"\rmtu_discovery\x18\x05 \x01(\tR\fmtuDiscovery\x12.\n" +
+	"\x13min_carrier_payload\x18\x06 \x01(\rR\x11minCarrierPayload\x12.\n" +
+	"\x13max_carrier_payload\x18\a \x01(\rR\x11maxCarrierPayload\x12)\n" +
+	"\x10reassembly_slots\x18\b \x01(\rR\x0freassemblySlots\x122\n" +
+	"\x15peer_reassembly_slots\x18\t \x01(\rR\x13peerReassemblySlots\x124\n" +
+	"\x16reassembly_lifetime_ms\x18\n" +
+	" \x01(\rR\x14reassemblyLifetimeMs\x12\x18\n" +
+	"\areorder\x18\v \x01(\bR\areorder\x12/\n" +
+	"\x14reorder_max_delay_ms\x18\f \x01(\rR\x11reorderMaxDelayMs\x12\x18\n" +
+	"\aworkers\x18\r \x01(\rR\aworkers\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\fR\trequestId\x12/\n" +
-	"\x13expected_generation\x18\x02 \x01(\x04R\x12expectedGeneration\x124\n" +
-	"\x05peers\x18\x03 \x03(\v2\x1e.wgf.controlapi.v1.DesiredPeerR\x05peers\"\xc0\x02\n" +
-	"\vDesiredPeer\x12\x1d\n" +
+	"tun_queues\x18\x0e \x01(\rR\ttunQueues\x12#\n" +
+	"\rsocket_buffer\x18\x0f \x01(\rR\fsocketBuffer\x12\x17\n" +
+	"\afw_mark\x18\x10 \x01(\rR\x06fwMark\x121\n" +
+	"\x05peers\x18\x11 \x03(\v2\x1b.wgf.controlapi.v1.PeerSpecR\x05peers\"\xbd\x02\n" +
+	"\bPeerSpec\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\tR\tpublicKey\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\x12\x1f\n" +
@@ -2120,29 +2441,24 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"\rpreshared_key\x18\x05 \x01(\fR\fpresharedKey\x12W\n" +
 	"\x14preshared_key_action\x18\x06 \x01(\x0e2%.wgf.controlapi.v1.PresharedKeyActionR\x12presharedKeyAction\x12\x1d\n" +
 	"\n" +
-	"metrics_id\x18\a \x01(\tR\tmetricsId\"n\n" +
-	"\x13ApplyConfigResponse\x12\x1e\n" +
+	"metrics_id\x18\a \x01(\tR\tmetricsId\"\x80\x04\n" +
+	"\x0fInterfaceStatus\x121\n" +
+	"\x03ref\x18\x01 \x01(\v2\x1f.wgf.controlapi.v1.InterfaceRefR\x03ref\x12C\n" +
+	"\tlifecycle\x18\x02 \x01(\x0e2%.wgf.controlapi.v1.InterfaceLifecycleR\tlifecycle\x12'\n" +
+	"\x0flifecycle_error\x18\x03 \x01(\tR\x0elifecycleError\x12\x1d\n" +
 	"\n" +
-	"generation\x18\x01 \x01(\x04R\n" +
-	"generation\x127\n" +
-	"\aresults\x18\x02 \x03(\v2\x1d.wgf.controlapi.v1.PeerResultR\aresults\"A\n" +
-	"\n" +
-	"PeerResult\x12\x1d\n" +
-	"\n" +
-	"public_key\x18\x01 \x01(\tR\tpublicKey\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"\xaa\x02\n" +
-	"\x11GetStatusResponse\x12%\n" +
-	"\x0einterface_name\x18\x01 \x01(\tR\rinterfaceName\x12\x1d\n" +
-	"\n" +
-	"public_key\x18\x02 \x01(\tR\tpublicKey\x12\x1f\n" +
-	"\vlisten_port\x18\x03 \x01(\rR\n" +
+	"public_key\x18\x04 \x01(\tR\tpublicKey\x12\x1f\n" +
+	"\vlisten_port\x18\x05 \x01(\rR\n" +
 	"listenPort\x12\x10\n" +
-	"\x03mtu\x18\x04 \x01(\rR\x03mtu\x12;\n" +
-	"\bcounters\x18\x06 \x01(\v2\x1f.wgf.controlapi.v1.ShimCountersR\bcounters\x123\n" +
-	"\x05peers\x18\a \x03(\v2\x1d.wgf.controlapi.v1.PeerStatusR\x05peers\x12\x1e\n" +
+	"\x03mtu\x18\x06 \x01(\rR\x03mtu\x12;\n" +
+	"\bcounters\x18\a \x01(\v2\x1f.wgf.controlapi.v1.ShimCountersR\bcounters\x123\n" +
+	"\x05peers\x18\b \x03(\v2\x1d.wgf.controlapi.v1.PeerStatusR\x05peers\x12\x1e\n" +
 	"\n" +
 	"generation\x18\t \x01(\x04R\n" +
-	"generationJ\x04\b\x05\x10\x06J\x04\b\b\x10\t\"\xcc\x04\n" +
+	"generation\x124\n" +
+	"\x04spec\x18\n" +
+	" \x01(\v2 .wgf.controlapi.v1.InterfaceSpecR\x04spec\x122\n" +
+	"\x15native_interface_name\x18\v \x01(\tR\x13nativeInterfaceName\"\xcc\x04\n" +
 	"\n" +
 	"PeerStatus\x12\x1d\n" +
 	"\n" +
@@ -2163,7 +2479,7 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"\x12control_path_error\x18\f \x01(\tR\x10controlPathError\x12#\n" +
 	"\rpreshared_key\x18\r \x01(\fR\fpresharedKey\x12\x1d\n" +
 	"\n" +
-	"metrics_id\x18\x0e \x01(\tR\tmetricsId\"\xe7\a\n" +
+	"metrics_id\x18\x0e \x01(\tR\tmetricsId\"\xd9\b\n" +
 	"\fShimCounters\x12\x1f\n" +
 	"\vtx_carriers\x18\x01 \x01(\x04R\n" +
 	"txCarriers\x12&\n" +
@@ -2186,67 +2502,63 @@ const file_controlapi_v1_controlapi_proto_rawDesc = "" +
 	"\x16reassembly_expirations\x18\v \x01(\x04R\x15reassemblyExpirations\x12(\n" +
 	"\x10udp_socket_drops\x18\f \x01(\x04R\x0eudpSocketDrops\x12.\n" +
 	"\x13control_queue_drops\x18\x13 \x01(\x04R\x11controlQueueDrops\x12B\n" +
-	"\x1dcontrol_materialization_drops\x18\x14 \x01(\x04R\x1bcontrolMaterializationDrops*6\n" +
+	"\x1dcontrol_materialization_drops\x18\x14 \x01(\x04R\x1bcontrolMaterializationDrops\x127\n" +
+	"\x18tx_native_fragment_drops\x18\x15 \x01(\x04R\x15txNativeFragmentDrops\x127\n" +
+	"\x18rx_native_fragment_drops\x18\x16 \x01(\x04R\x15rxNativeFragmentDrops*6\n" +
 	"\x12PresharedKeyAction\x12\f\n" +
 	"\bPRESERVE\x10\x00\x12\a\n" +
 	"\x03SET\x10\x01\x12\t\n" +
-	"\x05CLEAR\x10\x022\xc2\x01\n" +
-	"\n" +
-	"ControlAPI\x12V\n" +
-	"\tGetStatus\x12#.wgf.controlapi.v1.GetStatusRequest\x1a$.wgf.controlapi.v1.GetStatusResponse\x12\\\n" +
-	"\vApplyConfig\x12%.wgf.controlapi.v1.ApplyConfigRequest\x1a&.wgf.controlapi.v1.ApplyConfigResponseBAZ?github.com/kurochan/wg-frag-go/proto/controlapi/v1;controlapiv1b\beditionsp\xe9\a"
+	"\x05CLEAR\x10\x02BAZ?github.com/kurochan/wg-frag-go/proto/controlapi/v1;controlapiv1b\beditionsp\xe9\a"
 
-var file_controlapi_v1_controlapi_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_controlapi_v1_controlapi_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_controlapi_v1_controlapi_proto_goTypes = []any{
-	(PresharedKeyAction)(0),     // 0: wgf.controlapi.v1.PresharedKeyAction
-	(*GetStatusRequest)(nil),    // 1: wgf.controlapi.v1.GetStatusRequest
-	(*ApplyConfigRequest)(nil),  // 2: wgf.controlapi.v1.ApplyConfigRequest
-	(*DesiredPeer)(nil),         // 3: wgf.controlapi.v1.DesiredPeer
-	(*ApplyConfigResponse)(nil), // 4: wgf.controlapi.v1.ApplyConfigResponse
-	(*PeerResult)(nil),          // 5: wgf.controlapi.v1.PeerResult
-	(*GetStatusResponse)(nil),   // 6: wgf.controlapi.v1.GetStatusResponse
-	(*PeerStatus)(nil),          // 7: wgf.controlapi.v1.PeerStatus
-	(*ShimCounters)(nil),        // 8: wgf.controlapi.v1.ShimCounters
+var file_controlapi_v1_interface_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_controlapi_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_controlapi_v1_interface_proto_goTypes = []any{
+	(PresharedKeyAction)(0), // 0: wgf.controlapi.v1.PresharedKeyAction
+	(*InterfaceSpec)(nil),   // 1: wgf.controlapi.v1.InterfaceSpec
+	(*PeerSpec)(nil),        // 2: wgf.controlapi.v1.PeerSpec
+	(*InterfaceStatus)(nil), // 3: wgf.controlapi.v1.InterfaceStatus
+	(*PeerStatus)(nil),      // 4: wgf.controlapi.v1.PeerStatus
+	(*ShimCounters)(nil),    // 5: wgf.controlapi.v1.ShimCounters
+	(*InterfaceRef)(nil),    // 6: wgf.controlapi.v1.InterfaceRef
+	(InterfaceLifecycle)(0), // 7: wgf.controlapi.v1.InterfaceLifecycle
 }
-var file_controlapi_v1_controlapi_proto_depIdxs = []int32{
-	3, // 0: wgf.controlapi.v1.ApplyConfigRequest.peers:type_name -> wgf.controlapi.v1.DesiredPeer
-	0, // 1: wgf.controlapi.v1.DesiredPeer.preshared_key_action:type_name -> wgf.controlapi.v1.PresharedKeyAction
-	5, // 2: wgf.controlapi.v1.ApplyConfigResponse.results:type_name -> wgf.controlapi.v1.PeerResult
-	8, // 3: wgf.controlapi.v1.GetStatusResponse.counters:type_name -> wgf.controlapi.v1.ShimCounters
-	7, // 4: wgf.controlapi.v1.GetStatusResponse.peers:type_name -> wgf.controlapi.v1.PeerStatus
-	1, // 5: wgf.controlapi.v1.ControlAPI.GetStatus:input_type -> wgf.controlapi.v1.GetStatusRequest
-	2, // 6: wgf.controlapi.v1.ControlAPI.ApplyConfig:input_type -> wgf.controlapi.v1.ApplyConfigRequest
-	6, // 7: wgf.controlapi.v1.ControlAPI.GetStatus:output_type -> wgf.controlapi.v1.GetStatusResponse
-	4, // 8: wgf.controlapi.v1.ControlAPI.ApplyConfig:output_type -> wgf.controlapi.v1.ApplyConfigResponse
-	7, // [7:9] is the sub-list for method output_type
-	5, // [5:7] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+var file_controlapi_v1_interface_proto_depIdxs = []int32{
+	2, // 0: wgf.controlapi.v1.InterfaceSpec.peers:type_name -> wgf.controlapi.v1.PeerSpec
+	0, // 1: wgf.controlapi.v1.PeerSpec.preshared_key_action:type_name -> wgf.controlapi.v1.PresharedKeyAction
+	6, // 2: wgf.controlapi.v1.InterfaceStatus.ref:type_name -> wgf.controlapi.v1.InterfaceRef
+	7, // 3: wgf.controlapi.v1.InterfaceStatus.lifecycle:type_name -> wgf.controlapi.v1.InterfaceLifecycle
+	5, // 4: wgf.controlapi.v1.InterfaceStatus.counters:type_name -> wgf.controlapi.v1.ShimCounters
+	4, // 5: wgf.controlapi.v1.InterfaceStatus.peers:type_name -> wgf.controlapi.v1.PeerStatus
+	1, // 6: wgf.controlapi.v1.InterfaceStatus.spec:type_name -> wgf.controlapi.v1.InterfaceSpec
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_controlapi_v1_controlapi_proto_init() }
-func file_controlapi_v1_controlapi_proto_init() {
-	if File_controlapi_v1_controlapi_proto != nil {
+func init() { file_controlapi_v1_interface_proto_init() }
+func file_controlapi_v1_interface_proto_init() {
+	if File_controlapi_v1_interface_proto != nil {
 		return
 	}
+	file_controlapi_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlapi_v1_controlapi_proto_rawDesc), len(file_controlapi_v1_controlapi_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlapi_v1_interface_proto_rawDesc), len(file_controlapi_v1_interface_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   0,
 		},
-		GoTypes:           file_controlapi_v1_controlapi_proto_goTypes,
-		DependencyIndexes: file_controlapi_v1_controlapi_proto_depIdxs,
-		EnumInfos:         file_controlapi_v1_controlapi_proto_enumTypes,
-		MessageInfos:      file_controlapi_v1_controlapi_proto_msgTypes,
+		GoTypes:           file_controlapi_v1_interface_proto_goTypes,
+		DependencyIndexes: file_controlapi_v1_interface_proto_depIdxs,
+		EnumInfos:         file_controlapi_v1_interface_proto_enumTypes,
+		MessageInfos:      file_controlapi_v1_interface_proto_msgTypes,
 	}.Build()
-	File_controlapi_v1_controlapi_proto = out.File
-	file_controlapi_v1_controlapi_proto_goTypes = nil
-	file_controlapi_v1_controlapi_proto_depIdxs = nil
+	File_controlapi_v1_interface_proto = out.File
+	file_controlapi_v1_interface_proto_goTypes = nil
+	file_controlapi_v1_interface_proto_depIdxs = nil
 }

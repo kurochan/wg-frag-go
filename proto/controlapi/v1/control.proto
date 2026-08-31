@@ -1,0 +1,77 @@
+edition = "2024";
+
+package wgf.controlapi.v1;
+
+import "controlapi/v1/common.proto";
+import "controlapi/v1/interface.proto";
+
+option go_package = "github.com/kurochan/wg-frag-go/proto/controlapi/v1;controlapiv1";
+
+// ControlService manages one or more local wg-frag interfaces.
+service ControlService {
+  rpc ListInterfaces(ListInterfacesRequest) returns (ListInterfacesResponse);
+  rpc GetInterface(GetInterfaceRequest) returns (GetInterfaceResponse);
+  rpc CreateInterface(CreateInterfaceRequest) returns (CreateInterfaceResponse);
+  rpc DeleteInterface(DeleteInterfaceRequest) returns (DeleteInterfaceResponse);
+  rpc ApplyPeers(ApplyPeersRequest) returns (ApplyPeersResponse);
+  rpc RestartInterface(RestartInterfaceRequest) returns (RestartInterfaceResponse);
+}
+
+message ListInterfacesRequest {}
+
+message ListInterfacesResponse {
+  repeated InterfaceStatus interfaces = 1;
+}
+
+message GetInterfaceRequest {
+  InterfaceRef target = 1;
+  // Enables sensitive peer fields such as preshared keys for the owner-only
+  // configuration path. Private keys are never returned by this API.
+  bool include_secrets = 2;
+}
+
+message GetInterfaceResponse {
+  InterfaceStatus status = 1;
+}
+
+message CreateInterfaceRequest {
+  bytes request_id = 1;
+  InterfaceSpec spec = 2;
+}
+
+message CreateInterfaceResponse {
+  InterfaceStatus status = 1;
+}
+
+message DeleteInterfaceRequest {
+  InterfaceRef target = 1;
+  MutationContext mutation = 2;
+}
+
+message DeleteInterfaceResponse {}
+
+message ApplyPeersRequest {
+  InterfaceRef target = 1;
+  MutationContext mutation = 2;
+  repeated PeerSpec peers = 3;
+}
+
+message ApplyPeersResponse {
+  uint64 generation = 1;
+  repeated PeerResult results = 2;
+}
+
+message RestartInterfaceRequest {
+  InterfaceRef target = 1;
+  MutationContext mutation = 2;
+  InterfaceSpec spec = 3;
+}
+
+message RestartInterfaceResponse {
+  InterfaceStatus status = 1;
+}
+
+message PeerResult {
+  string public_key = 1;
+  string error = 2;
+}

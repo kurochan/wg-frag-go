@@ -44,7 +44,11 @@ func TestWriteOpenMetrics(t *testing.T) {
 	var output bytes.Buffer
 	err = WriteOpenMetrics(&output, selector, Snapshot{
 		BuildLabels: map[string]string{"version": "v1\"x", "commit": "abc", "go_version": "go-test"},
-		Samples:     []Sample{{Name: "wgf_tx_carriers_total", Labels: map[string]string{"interface": "wgf0"}, Value: 7}},
+		InterfaceSnapshots: []InterfaceSnapshot{{
+			Name:    "wgf0",
+			ID:      "a1b2c3d4e5f6g7h8",
+			Samples: []Sample{{Name: "wgf_tx_carriers_total", Value: 7}},
+		}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -54,11 +58,63 @@ func TestWriteOpenMetrics(t *testing.T) {
 		"# TYPE wgf_build_info gauge\n",
 		"wgf_build_info{commit=\"abc\",go_version=\"go-test\",version=\"v1\\\"x\"} 1\n",
 		"# TYPE wgf_tx_carriers counter\n",
-		"wgf_tx_carriers_total{interface=\"wgf0\"} 7\n",
+		"wgf_tx_carriers_total{interface=\"wgf0\",interface_id=\"a1b2c3d4e5f6g7h8\"} 7\n",
 		"# EOF\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("output missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestWriteOpenMetricsMultipleInterfacesUsesOneSchema(t *testing.T) {
+	t.Parallel()
+	selector, err := NewSelector([]string{"wgf_tx_carriers_total", "wgf_peer_pmtu_searching"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	err = WriteOpenMetrics(&output, selector, Snapshot{InterfaceSnapshots: []InterfaceSnapshot{
+		{Name: "wgf0", ID: "aaaaaaaaaaaaaaaa", Samples: []Sample{
+			{Name: "wgf_tx_carriers_total", Value: 1},
+			{Name: "wgf_peer_pmtu_searching", Labels: map[string]string{"peer_id": "peer-a"}, Value: 1},
+		}},
+		{Name: "wgf1", ID: "bbbbbbbbbbbbbbbb", Samples: []Sample{
+			{Name: "wgf_tx_carriers_total", Value: 2},
+			{Name: "wgf_peer_pmtu_searching", Labels: map[string]string{"peer_id": "peer-b"}, Value: 0},
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{
+		"wgf_tx_carriers_total{interface=\"wgf0\",interface_id=\"aaaaaaaaaaaaaaaa\"} 1\n",
+		"wgf_tx_carriers_total{interface=\"wgf1\",interface_id=\"bbbbbbbbbbbbbbbb\"} 2\n",
+		"wgf_peer_pmtu_searching{interface=\"wgf0\",interface_id=\"aaaaaaaaaaaaaaaa\",peer_id=\"peer-a\"} 1\n",
+		"wgf_peer_pmtu_searching{interface=\"wgf1\",interface_id=\"bbbbbbbbbbbbbbbb\",peer_id=\"peer-b\"} 0\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestWriteOpenMetricsRejectsInvalidScopeLabels(t *testing.T) {
+	t.Parallel()
+	selector, err := NewSelector([]string{"wgf_tx_carriers_total", "wgf_peer_pmtu_searching"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []Snapshot{
+		{Samples: []Sample{{Name: "wgf_tx_carriers_total", Value: 1}}},
+		{InterfaceSnapshots: []InterfaceSnapshot{{Name: "wgf0", ID: "id", Samples: []Sample{{Name: "wgf_peer_pmtu_searching", Value: 1}}}}},
+		{InterfaceSnapshots: []InterfaceSnapshot{{Name: "wgf0", ID: "id", Samples: []Sample{{Name: "wgf_tx_carriers_total", Labels: map[string]string{"peer_id": "peer"}, Value: 1}}}}},
+	}
+	for index, snapshot := range tests {
+		var output bytes.Buffer
+		if err := WriteOpenMetrics(&output, selector, snapshot); err == nil {
+			t.Fatalf("case %d unexpectedly succeeded", index)
 		}
 	}
 }

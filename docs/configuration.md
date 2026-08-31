@@ -44,7 +44,7 @@ All WGF-specific settings belong in `[Interface]`.
 | `WGFWorkers` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one shim worker and logs a warning for an explicit value. |
 | `WGFTUNQueues` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one TUN queue and logs a warning for an explicit value. |
 | `WGFMetrics` | `off` | `off` or `on` | Enables the unauthenticated OpenMetrics endpoint. |
-| `WGFMetricsListen` | `auto` | `auto` or comma-separated IP-literal `host:port` values | `auto` attempts `127.0.0.1` and `::1` using the effective UDP `ListenPort` number over TCP; one available family is sufficient. Explicit non-loopback listeners are allowed, but expose metrics without authentication. |
+| `WGFMetricsListen` | `auto` | `auto` or comma-separated IP-literal `host:port` values | `auto` attempts both `127.0.0.1` and `::1` using the effective UDP `ListenPort` number over TCP; either loopback family is sufficient when the other is unavailable. Explicit non-loopback listeners are allowed, but expose metrics without authentication. |
 | `WGFMetricsInclude` | unset | Comma-separated metric-name patterns | Limits exposed metrics. A pattern has at most one `*`; empty means every metric. |
 | `WGFMetricsExclude` | unset | Comma-separated metric-name patterns | Removes metrics after inclusion. Exclude takes precedence. |
 
@@ -67,7 +67,7 @@ one 16-byte WireGuard padding bucket below the IPv6 protocol maximum.
 | `Endpoint` | unset | Hostname or IP address with UDP port. IPv6 endpoints use brackets. |
 | `AllowedIPs` | unset | One or more comma-separated CIDR prefixes. Used for outbound peer selection and inbound source validation. |
 | `PersistentKeepalive` | `off` | `off` or an integer number of seconds. |
-| `WGFPeerID` | derived | Lowercase letters, digits, `_`, or `-`, up to 32 characters | Optional stable `peer_id` label for peer metrics. It must be unique within the interface. When omitted, WGF derives a 16-character opaque ID from the WireGuard public key. |
+| `WGFPeerID` | derived | Lowercase letters, digits, `_`, or `-`, up to 32 characters | Optional stable `peer_id` label for peer metrics. It must be unique within the interface. When omitted, WGF derives a 16-character opaque ID from the first 10 bytes of BLAKE2s(`"wgf:" || raw_public_key`), encoded as lowercase unpadded base32. |
 
 Do not add WGF's hidden carrier addresses to `AllowedIPs`; WGF derives and
 installs them internally.
@@ -114,3 +114,7 @@ by the deployment.
 the local control socket. The running interface private key, listen port, and
 MTU must still match the supplied configuration; change those by restarting the
 interface with `wgf quick` or `wgf run`.
+
+The public gRPC service and its multi-interface manager are documented in the
+[Control API reference](control-api.md). The API uses the same interface and
+peer settings, but address assignment and route policy remain outside the API.

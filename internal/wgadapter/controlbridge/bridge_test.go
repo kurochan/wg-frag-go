@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/netip"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -39,12 +40,50 @@ type fakeTUN struct {
 	enableSet int
 	pmtu      uint32
 	searching bool
+	pmtuCalls int
 }
 
 type orderedTUN struct {
 	fakeTUN
 
 	order []string
+}
+
+type blockingPMTUTUN struct {
+	fakeTUN
+
+	blockMu     sync.Mutex
+	block       bool
+	entered     chan struct{}
+	release     chan struct{}
+	enteredOnce sync.Once
+	releaseOnce sync.Once
+}
+
+func newBlockingPMTUTUN() *blockingPMTUTUN {
+	return &blockingPMTUTUN{entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (t *blockingPMTUTUN) SetPeerPMTUState(peer peerroute.PeerID, ownerKey [32]byte, carrierPayload uint32, searching bool) error {
+	err := t.fakeTUN.SetPeerPMTUState(peer, ownerKey, carrierPayload, searching)
+	t.blockMu.Lock()
+	block := t.block
+	t.blockMu.Unlock()
+	if block {
+		t.enteredOnce.Do(func() { close(t.entered) })
+		<-t.release
+	}
+	return err
+}
+
+func (t *blockingPMTUTUN) setBlocked(block bool) {
+	t.blockMu.Lock()
+	t.block = block
+	t.blockMu.Unlock()
+}
+
+func (t *blockingPMTUTUN) unblock() {
+	t.releaseOnce.Do(func() { close(t.release) })
 }
 
 func (t *orderedTUN) EnqueueControl(peer peerroute.PeerID, frame []byte) error {
@@ -101,6 +140,7 @@ func (t *fakeTUN) SetPeerPMTUState(_ peerroute.PeerID, _ [32]byte, carrierPayloa
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.pmtu, t.searching = carrierPayload, searching
+	t.pmtuCalls++
 	return nil
 }
 
@@ -122,6 +162,177 @@ func (t *fakeTUN) installCount() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.installs
+}
+
+func (t *fakeTUN) pmtuPublishCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.pmtuCalls
+}
+
+func TestDetachStopsCallbacksAndPMTUUpdates(t *testing.T) {
+	t.Parallel()
+	tun := new(fakeTUN)
+	bridge, err := New(Config{
+		Engine:       testEngine(t, 0xd201, 304),
+		TUN:          tun,
+		PeerID:       7,
+		OwnerKey:     [32]byte{1},
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	before := tun.pmtuPublishCount()
+	bridge.Detach()
+
+	if err := bridge.Start(); err != nil {
+		t.Fatalf("Start after Detach() error = %v", err)
+	}
+	if err := bridge.Tick(time.Unix(1, 0)); err != nil {
+		t.Fatalf("Tick after Detach() error = %v", err)
+	}
+	if err := bridge.ReportTransportError(time.Unix(1, 0), syscall.EMSGSIZE, 613); err != nil {
+		t.Fatalf("ReportTransportError after Detach() error = %v", err)
+	}
+	if err := bridge.ReportUnknownDataSession(7, 1); err != nil {
+		t.Fatalf("ReportUnknownDataSession after Detach() error = %v", err)
+	}
+	if err := bridge.DeliverControl(7, []byte{0, 0, 1}); err != nil {
+		t.Fatalf("DeliverControl after Detach() error = %v", err)
+	}
+	if after := tun.pmtuPublishCount(); after != before {
+		t.Fatalf("PMTU updates after Detach() = %d, want %d", after, before)
+	}
+}
+
+func TestDetachedBridgeCannotUpdateReusedPeerSlot(t *testing.T) {
+	t.Parallel()
+	tun := new(fakeTUN)
+	ownerKey := [32]byte{2}
+	oldBridge, err := New(Config{
+		Engine:       testEngine(t, 0xd301, 305),
+		TUN:          tun,
+		PeerID:       7,
+		OwnerKey:     ownerKey,
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := oldBridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	oldBridge.Detach()
+
+	newBridge, err := New(Config{
+		Engine:       testEngine(t, 0xd401, 306),
+		TUN:          tun,
+		PeerID:       7,
+		OwnerKey:     ownerKey,
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := newBridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	before := tun.pmtuPublishCount()
+	if err := oldBridge.Tick(time.Unix(1, 0)); err != nil {
+		t.Fatalf("stale Tick() error = %v", err)
+	}
+	if after := tun.pmtuPublishCount(); after != before {
+		t.Fatalf("stale bridge published PMTU state: calls %d -> %d", before, after)
+	}
+}
+
+func TestDetachDrainsInFlightCallbackBeforeSlotReuse(t *testing.T) {
+	t.Parallel()
+	tun := newBlockingPMTUTUN()
+	t.Cleanup(tun.unblock)
+	ownerKey := [32]byte{3}
+	oldBridge, err := New(Config{
+		Engine:       testEngine(t, 0xd501, 307),
+		TUN:          tun,
+		PeerID:       7,
+		OwnerKey:     ownerKey,
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := oldBridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	tun.setBlocked(true)
+
+	tickDone := make(chan error, 1)
+	go func() { tickDone <- oldBridge.Tick(time.Unix(1, 0)) }()
+	select {
+	case <-tun.entered:
+	case <-time.After(time.Second):
+		t.Fatal("Tick did not enter the blocked PMTU update")
+	}
+
+	detachStarted := make(chan struct{})
+	detachDone := make(chan struct{})
+	go func() {
+		close(detachStarted)
+		oldBridge.Detach()
+		close(detachDone)
+	}()
+	<-detachStarted
+	select {
+	case <-detachDone:
+		t.Fatal("Detach completed while a bridge callback was still in progress")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	tun.unblock()
+	select {
+	case err := <-tickDone:
+		if err != nil {
+			t.Fatalf("in-flight Tick() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("in-flight Tick did not finish after release")
+	}
+	select {
+	case <-detachDone:
+	case <-time.After(time.Second):
+		t.Fatal("Detach did not finish after the callback drained")
+	}
+
+	tun.setBlocked(false)
+	newBridge, err := New(Config{
+		Engine:       testEngine(t, 0xd601, 308),
+		TUN:          tun,
+		PeerID:       7,
+		OwnerKey:     ownerKey,
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := newBridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	before := tun.pmtuPublishCount()
+	if err := oldBridge.Tick(time.Unix(2, 0)); err != nil {
+		t.Fatalf("stale Tick() error = %v", err)
+	}
+	if after := tun.pmtuPublishCount(); after != before {
+		t.Fatalf("stale bridge published after Detach(): calls %d -> %d", before, after)
+	}
 }
 
 func TestBidirectionalControlOpensOnlyNegotiatedDirectionalDataPlane(t *testing.T) {

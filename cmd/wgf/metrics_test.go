@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -17,6 +18,16 @@ import (
 	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/metrics"
 )
+
+type closeTrackingListener struct {
+	net.Listener
+	closed atomic.Bool
+}
+
+func (listener *closeTrackingListener) Close() error {
+	listener.closed.Store(true)
+	return listener.Listener.Close()
+}
 
 func TestMetricsAddresses(t *testing.T) {
 	t.Parallel()
@@ -77,19 +88,9 @@ func TestMetricsHTTPHandler(t *testing.T) {
 	}
 }
 
-func TestEffectiveListenPort(t *testing.T) {
-	t.Parallel()
-	if got, err := effectiveListenPort("private_key=abc\nlisten_port=51820\n"); err != nil || got != 51820 {
-		t.Fatalf("effectiveListenPort = (%d, %v)", got, err)
-	}
-	if _, err := effectiveListenPort("listen_port=0\n"); err == nil {
-		t.Fatal("zero port succeeded")
-	}
-}
-
 func TestMetricsStartClosesPartialListeners(t *testing.T) {
 	t.Parallel()
-	var firstAddress string
+	var first *closeTrackingListener
 	calls := 0
 	_, err := startMetricsServerWithListen(
 		config.Interface{MetricsListen: config.MetricsListen{Addresses: []string{"127.0.0.1:1", "127.0.0.1:2"}}},
@@ -102,27 +103,27 @@ func TestMetricsStartClosesPartialListeners(t *testing.T) {
 				return nil, errors.New("injected listen failure")
 			}
 			listener, listenErr := net.Listen("tcp", "127.0.0.1:0")
-			if listenErr == nil {
-				firstAddress = listener.Addr().String()
+			if listenErr != nil {
+				return nil, listenErr
 			}
-			return listener, listenErr
+			first = &closeTrackingListener{Listener: listener}
+			return first, nil
 		},
 	)
 	if err == nil {
 		t.Fatal("startMetricsServerWithListen unexpectedly succeeded")
 	}
-	if calls != 2 || firstAddress == "" {
-		t.Fatalf("listen calls = %d, first address = %q", calls, firstAddress)
+	if calls != 2 || first == nil {
+		t.Fatalf("listen calls = %d, first listener = %v", calls, first)
 	}
-	probe, err := net.Listen("tcp", firstAddress)
-	if err != nil {
-		t.Fatalf("first listener was not closed: %v", err)
+	if !first.closed.Load() {
+		t.Fatal("first listener was not closed")
 	}
-	_ = probe.Close()
 }
 
-func TestMetricsAutoKeepsAvailableLoopbackFamily(t *testing.T) {
+func TestMetricsAutoContinuesWhenOneLoopbackFamilyIsUnavailable(t *testing.T) {
 	t.Parallel()
+	var first *closeTrackingListener
 	server, err := startMetricsServerWithListen(
 		config.Interface{MetricsListen: config.MetricsListen{Auto: true}},
 		51820,
@@ -132,15 +133,36 @@ func TestMetricsAutoKeepsAvailableLoopbackFamily(t *testing.T) {
 			if strings.HasPrefix(address, "[::1]") {
 				return nil, errors.New("IPv6 disabled")
 			}
-			return net.Listen("tcp", "127.0.0.1:0")
+			listener, listenErr := net.Listen("tcp", "127.0.0.1:0")
+			if listenErr != nil {
+				return nil, listenErr
+			}
+			first = &closeTrackingListener{Listener: listener}
+			return first, nil
 		},
 	)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("auto metrics failed with one loopback family: %v", err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
-	if len(server.listeners) != 1 {
-		t.Fatalf("listeners = %d, want 1", len(server.listeners))
+	if first == nil || first.closed.Load() {
+		t.Fatal("available loopback listener was not retained")
+	}
+}
+
+func TestMetricsAutoFailsWhenNoLoopbackFamilyIsAvailable(t *testing.T) {
+	t.Parallel()
+	_, err := startMetricsServerWithListen(
+		config.Interface{MetricsListen: config.MetricsListen{Auto: true}},
+		51820,
+		slog.New(slog.DiscardHandler),
+		func() metrics.Snapshot { return metrics.Snapshot{} },
+		func(_, address string) (net.Listener, error) {
+			return nil, fmt.Errorf("%s unavailable", address)
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "no metrics listener") {
+		t.Fatalf("auto metrics error = %v, want no listener error", err)
 	}
 }
 

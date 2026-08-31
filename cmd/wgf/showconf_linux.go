@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/controlapi"
 	"github.com/kurochan/wg-frag-go/internal/quick"
 )
 
@@ -33,7 +33,7 @@ func showconf(args []string, getStatus statusGetter, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	status, err := getStatus(context.Background(), controlapi.SocketPath(ifname))
+	status, err := getStatus(context.Background(), controlapi.SocketPath(ifname), ifname)
 	if err != nil {
 		return fmt.Errorf("is `wgf run %s` running? %w", ifname, err)
 	}

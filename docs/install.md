@@ -2,9 +2,10 @@
 
 Supported runtime targets are Linux amd64/arm64 and macOS amd64/arm64. The
 correctness baseline is Linux 5.10 or newer; Linux 6.2 or newer is recommended
-for performance. macOS currently supports foreground `wgf run` only: it
-allocates a native `utunN` device, while the operator configures addresses and
-routes. Its root-owned control sockets are stored below `/var/db/wg-frag`.
+for performance. macOS supports foreground `wgf run` and `wgf manager`: each
+managed interface allocates a native `utunN` device, while the operator
+configures addresses and routes. Root-owned control sockets are stored below
+`/var/db/wg-frag`.
 `wgf quick`, systemd integration, Debian packages, and the PPA are
 Linux-only.
 The PPA targets Ubuntu series while they are in Canonical's standard support
@@ -60,8 +61,8 @@ tar -xzf wg-frag-go_<version>_darwin_arm64.tar.gz
 sudo install -m 0755 wgf /usr/local/bin/wgf
 ```
 
-macOS supports foreground `wgf run`; the operator configures addresses and
-routes on the allocated `utunN` interface.
+macOS supports foreground `wgf run` and `wgf manager`; the operator configures
+addresses and routes on each allocated `utunN` interface.
 
 ## Install from the Launchpad PPA
 
@@ -167,10 +168,20 @@ underlay MTU; WGF fragments the excess data.
 
 ```sh
 sudo systemctl enable --now wgf@wgf0     # /etc/wg-frag/wgf0.conf
+# reread the file without replacing the TUN device
+sudo systemctl reload wgf@wgf0
 # or manually:
 sudo wgf quick up wgf0
 sudo wgf quick down wgf0
 ```
+
+`systemctl reload` applies peer-only changes in place and uses the control API
+to restart the runtime generation when interface settings change. Changes to
+addresses, `Table`, quick hooks, process metrics, or `AllowedIPs` that alter
+quick-managed routes are rejected by reload and require `systemctl restart`.
+Reload retries an ambiguous control response with the same mutation ID, but
+fails after two minutes instead of holding the quick operation lock forever.
+Any compensating rollback receives a separate two-minute budget.
 
 `wgf quick up` writes a 0600 runtime snapshot and input snapshot under
 `/run/wg-frag/`; these files are not the authority for persistent

@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/controlapi"
 	"github.com/kurochan/wg-frag-go/internal/platform/runtimedir"
 	"github.com/kurochan/wg-frag-go/internal/quick"
 	"github.com/vishvananda/netlink"
@@ -42,12 +42,14 @@ const (
 
 func quickCommand(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: wgf quick up|down|save|strip <interface|config-file>")
+		return errors.New("usage: wgf quick up|reload|down|save|strip <interface|config-file>")
 	}
 
 	switch args[0] {
 	case "up":
 		return quickUp(args[1:], stdout, stderr)
+	case "reload":
+		return quickReload(args[1:], stdout, stderr)
 	case "down":
 		return quickDown(args[1:], stdout, stderr)
 	case "save":
@@ -650,7 +652,7 @@ func saveRunningConfig(ifname, output string, stdout, stderr io.Writer) error {
 		output = canonical
 	}
 
-	status, err := controlapi.GetStatusWithSecrets(context.Background(), controlapi.SocketPath(ifname))
+	status, err := getStatusWithSecrets(context.Background(), controlapi.SocketPath(ifname), ifname)
 	if err != nil {
 		return fmt.Errorf("is `wgf run %s` running? %w", ifname, err)
 	}
@@ -741,7 +743,7 @@ func waitDaemonReady(ifname string, pid int) error {
 			return fmt.Errorf("wgf run %s exited during startup; check its log output", ifname)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err = controlapi.GetStatus(ctx, socket)
+		_, err = getStatus(ctx, socket, ifname)
 		cancel()
 		if err == nil {
 			return nil
