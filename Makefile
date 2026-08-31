@@ -1,4 +1,4 @@
-.PHONY: build clean lint tools-download proto proto-check test test-race fuzz release-notes-generate \
+.PHONY: build clean lint tools-download proto proto-check test test-race test-release-scripts fuzz release-notes-generate \
 	release-notes-check release-tag-check \
 	test-netns bench-netns \
 	test-netns-control-recovery test-netns-base-recovery \
@@ -50,6 +50,9 @@ test:
 
 test-race:
 	go test -race ./...
+
+test-release-scripts:
+	ruby scripts/validate_ppa_source_test.rb
 
 # Linux-only privileged integration: creates and removes two temporary network
 # namespaces, veth interfaces, TUN interfaces, and test keys from Go.
