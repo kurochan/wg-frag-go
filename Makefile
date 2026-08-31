@@ -1,6 +1,6 @@
 .PHONY: build clean lint tools-download proto proto-check test test-race test-release-scripts fuzz release-notes-generate \
 	release-notes-check release-tag-check \
-	test-netns bench-netns \
+	test-netns test-netns-manager bench-netns \
 	test-netns-control-recovery test-netns-base-recovery \
 	test-netns-base-failure-recovery test-netns-no-fragment test-netns-no-fragmentation
 
@@ -9,7 +9,7 @@ build:
 	go build -trimpath -o bin/wgf ./cmd/wgf
 
 clean:
-	rm -rf bin wgf
+	rm -rf bin wgf wgf.exe
 
 # Tools are built from tools/go.mod, independently of the product module. The
 # linter runs with the host toolchain; Linux-only code is checked by the Linux
@@ -58,6 +58,9 @@ test-release-scripts:
 # namespaces, veth interfaces, TUN interfaces, and test keys from Go.
 test-netns:
 	WGF_RUN_NETNS=1 go test -tags=integration -count=1 -run '^TestWGFNetNSWireGuardUDP$$' ./cmd/wgf
+
+test-netns-manager:
+	WGF_RUN_NETNS=1 go test -tags=integration -count=1 -run '^TestWGFManagerNetNSLifecycle$$' ./cmd/wgf
 
 # Fault-injection variants are opt-in and require the same isolated Linux VM
 # and CAP_NET_ADMIN/CAP_NET_RAW as test-netns.

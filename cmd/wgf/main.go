@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kurochan/wg-frag-go/internal/controlapi"
 	"github.com/kurochan/wg-frag-go/internal/quick"
 	"github.com/kurochan/wg-frag-go/internal/version"
 	"github.com/kurochan/wg-frag-go/internal/wgadapter"
@@ -54,20 +53,22 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return check(args[1:], stdout, stderr)
 	case "run":
 		return runCommand(args[1:], stdout, stderr)
+	case "manager":
+		return managerCommand(args[1:], stdout, stderr)
 	case "quick":
 		return quickCommand(args[1:], stdout, stderr)
 	case "show":
-		return show(args[1:], controlapi.GetStatus, stdout)
+		return show(args[1:], getStatus, listInterfaceStatuses, stdout)
 	case "showconf":
-		return showconf(args[1:], controlapi.GetStatusWithSecrets, stdout)
+		return showconf(args[1:], getStatusWithSecrets, stdout)
 	case "set":
-		return setCommand(args[1:], controlapi.GetStatus, controlapi.ApplyConfig, stdout)
+		return setCommand(args[1:], getStatus, applyPeers, stdout)
 	case "setconf":
-		return setconf(confSet, args[1:], controlapi.GetStatus, controlapi.ApplyConfig, stdout)
+		return setconf(confSet, args[1:], getStatus, applyPeers, stdout)
 	case "addconf":
-		return setconf(confAdd, args[1:], controlapi.GetStatus, controlapi.ApplyConfig, stdout)
+		return setconf(confAdd, args[1:], getStatus, applyPeers, stdout)
 	case "syncconf":
-		return setconf(confSync, args[1:], controlapi.GetStatus, controlapi.ApplyConfig, stdout)
+		return setconf(confSync, args[1:], getStatus, applyPeers, stdout)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -126,5 +127,6 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  syncconf IFNAME FILE  same as setconf; existing sessions are preserved")
 	fmt.Fprintln(writer, "  check --config PATH  validate a WGF configuration")
 	fmt.Fprintln(writer, "  run IFNAME --config PATH  run one interface in the foreground")
-	fmt.Fprintln(writer, "  quick up|down|save|strip ARG  wg-quick style lifecycle (also as wgf-quick)")
+	fmt.Fprintln(writer, "  manager [OPTIONS]  run the multi-interface management daemon")
+	fmt.Fprintln(writer, "  quick up|reload|down|save|strip ARG  wg-quick style lifecycle (also as wgf-quick)")
 }

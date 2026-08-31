@@ -176,6 +176,23 @@ func TestMetricsPeerID(t *testing.T) {
 	}
 }
 
+func TestMetricsInterfaceIDUsesSeparateStableDomain(t *testing.T) {
+	t.Parallel()
+	key := keyValue(2)
+	first := MetricsInterfaceID(key)
+	if first != MetricsInterfaceID(key) || len(first) != 16 {
+		t.Fatalf("MetricsInterfaceID = %q", first)
+	}
+	for _, char := range first {
+		if (char < 'a' || char > 'z') && (char < '2' || char > '7') {
+			t.Fatalf("MetricsInterfaceID contains %q", char)
+		}
+	}
+	if first == MetricsPeerID(Peer{PublicKey: key}) {
+		t.Fatal("interface and peer IDs share a domain")
+	}
+}
+
 func TestParseEmptyMetricSelection(t *testing.T) {
 	t.Parallel()
 	input := "[Interface]\nPrivateKey = " + encodedKey(1) + "\nWGFMetricsInclude =\nWGFMetricsExclude =\n"

@@ -1,9 +1,27 @@
 package main
 
-import controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
+import (
+	"encoding/base64"
 
-func testDesiredPeer(publicKey, endpoint string, allowed []string) *controlapiv1.DesiredPeer {
-	peer := controlapiv1.DesiredPeer_builder{}.Build()
+	"github.com/kurochan/wg-frag-go/internal/config"
+	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
+)
+
+func controlConfigKey(value byte) config.Key {
+	var key config.Key
+	for index := range key {
+		key[index] = value
+	}
+	return key
+}
+
+func encodedControlConfigKey(value byte) string {
+	key := controlConfigKey(value)
+	return base64.StdEncoding.EncodeToString(key[:])
+}
+
+func testDesiredPeer(publicKey, endpoint string, allowed []string) *controlapiv1.PeerSpec {
+	peer := controlapiv1.PeerSpec_builder{}.Build()
 	peer.SetPublicKey(publicKey)
 	if endpoint != "" {
 		peer.SetEndpoint(endpoint)
@@ -29,15 +47,15 @@ func testPeerStatus(publicKey, endpoint string, allowed []string, dataReady bool
 	return peer
 }
 
-func testStatusResponse(generation uint64, peers []*controlapiv1.PeerStatus) *controlapiv1.GetStatusResponse {
-	status := controlapiv1.GetStatusResponse_builder{}.Build()
+func testStatusResponse(generation uint64, peers []*controlapiv1.PeerStatus) *controlapiv1.InterfaceStatus {
+	status := controlapiv1.InterfaceStatus_builder{}.Build()
 	status.SetGeneration(generation)
 	status.SetPeers(peers)
 	return status
 }
 
-func testApplyResponse(generation uint64) *controlapiv1.ApplyConfigResponse {
-	response := controlapiv1.ApplyConfigResponse_builder{}.Build()
+func testApplyResponse(generation uint64) *controlapiv1.ApplyPeersResponse {
+	response := controlapiv1.ApplyPeersResponse_builder{}.Build()
 	response.SetGeneration(generation)
 	return response
 }

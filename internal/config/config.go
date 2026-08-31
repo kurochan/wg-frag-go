@@ -99,13 +99,23 @@ type Peer struct {
 	MetricsID           string
 }
 
+// MetricsInterfaceID returns a stable opaque ID derived from an interface's
+// WireGuard public key.
+func MetricsInterfaceID(publicKey Key) string {
+	return derivedMetricsID("wgf:interface:", publicKey)
+}
+
 // MetricsPeerID returns the configured metrics ID, or a stable opaque ID
 // derived from the peer public key when WGFPeerID is unset.
 func MetricsPeerID(peer Peer) string {
 	if peer.MetricsID != "" {
 		return peer.MetricsID
 	}
-	hash := blake2s.Sum256(append([]byte("wgf:"), peer.PublicKey[:]...))
+	return derivedMetricsID("wgf:", peer.PublicKey)
+}
+
+func derivedMetricsID(domain string, publicKey Key) string {
+	hash := blake2s.Sum256(append([]byte(domain), publicKey[:]...))
 	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:10]))
 }
 
@@ -162,7 +172,7 @@ type parser struct {
 }
 
 // NewPeer validates one runtime-supplied peer definition with the same rules
-// as the file parser, so ApplyConfig cannot admit a peer Parse would reject.
+// as the file parser, so ApplyPeers cannot admit a peer Parse would reject.
 func NewPeer(publicKey, endpoint string, allowedIPs []string, keepaliveSeconds uint32) (Peer, error) {
 	return NewPeerWithPresharedKey(publicKey, endpoint, allowedIPs, keepaliveSeconds, "")
 }
@@ -288,6 +298,13 @@ func defaultConfig() Config {
 		SocketBuffer:        DefaultSocketBuffer,
 		MetricsListen:       MetricsListen{Auto: true},
 	}}
+}
+
+// Default returns a complete runtime configuration populated with the same
+// defaults used by the file parser. Callers must still set a private key and
+// at least one peer before starting an interface.
+func Default() Config {
+	return defaultConfig()
 }
 
 func (p *parser) parseSection(line string) error {
@@ -458,7 +475,7 @@ func (p *parser) parseInterfaceField(name, value string) error {
 		p.config.Interface.Metrics = boolean
 	case "WGFMetricsListen":
 		field = interfaceMetricsListen
-		listen, err := parseMetricsListen(value)
+		listen, err := ParseMetricsListen(value)
 		if err != nil {
 			return fmt.Errorf("WGFMetricsListen: %w", err)
 		}
@@ -561,7 +578,23 @@ func (p *parser) validate() error {
 	if p.interfaceFields&interfacePrivateKey == 0 {
 		return errors.New("missing [Interface] PrivateKey")
 	}
-	iface := &p.config.Interface
+	for i := range p.config.Peers {
+		if p.peerFields[i]&peerPublicKey == 0 {
+			return fmt.Errorf("peer %d is missing PublicKey", i+1)
+		}
+	}
+	return Validate(&p.config)
+}
+
+// Validate checks a programmatically constructed runtime configuration using
+// the same value constraints as Parse. Presence checks for textual fields are
+// the parser's responsibility; zero private and peer keys are rejected by the
+// WireGuard planning layer.
+func Validate(cfg *Config) error {
+	if cfg == nil {
+		return errors.New("nil configuration")
+	}
+	iface := &cfg.Interface
 	if err := limits.ValidateInnerMTU(iface.MTU); err != nil {
 		return err
 	}
@@ -596,12 +629,7 @@ func (p *parser) validate() error {
 		return err
 	}
 
-	for i := range p.config.Peers {
-		if p.peerFields[i]&peerPublicKey == 0 {
-			return fmt.Errorf("peer %d is missing PublicKey", i+1)
-		}
-	}
-	return ValidatePeers(p.config.Peers)
+	return ValidatePeers(cfg.Peers)
 }
 
 // ValidatePeers validates peer identities shared by file parsing and runtime
@@ -762,7 +790,9 @@ func parseAutoCount(value string) (AutoCount, error) {
 	return AutoCount{Count: count}, nil
 }
 
-func parseMetricsListen(value string) (MetricsListen, error) {
+// ParseMetricsListen parses an automatic or comma-separated list of explicit
+// IP-literal TCP listener addresses.
+func ParseMetricsListen(value string) (MetricsListen, error) {
 	if value == "auto" {
 		return MetricsListen{Auto: true}, nil
 	}

@@ -46,22 +46,33 @@ func TestDesiredPeerMetricsIDRoundTrips(t *testing.T) {
 
 func TestMergePeersPreservesExistingMetricsID(t *testing.T) {
 	t.Parallel()
-	base := controlapiv1.DesiredPeer_builder{}.Build()
+	base := controlapiv1.PeerSpec_builder{}.Build()
 	base.SetPublicKey("AAA=")
 	base.SetMetricsId("edge-a")
-	addition := controlapiv1.DesiredPeer_builder{}.Build()
+	addition := controlapiv1.PeerSpec_builder{}.Build()
 	addition.SetPublicKey("AAA=")
 	addition.SetEndpoint("192.0.2.1:51820")
 
-	merged := mergePeers([]*controlapiv1.DesiredPeer{base}, []*controlapiv1.DesiredPeer{addition})
+	merged := mergePeers([]*controlapiv1.PeerSpec{base}, []*controlapiv1.PeerSpec{addition})
 	if got := merged[0].GetMetricsId(); got != "edge-a" {
 		t.Fatalf("merged metrics ID = %q, want edge-a", got)
 	}
 }
 
+func TestMergePeersClearsMissingPSKForNewPeer(t *testing.T) {
+	t.Parallel()
+	addition := controlapiv1.PeerSpec_builder{}.Build()
+	addition.SetPublicKey("BBB=")
+
+	merged := mergePeers(nil, []*controlapiv1.PeerSpec{addition})
+	if got := merged[0].GetPresharedKeyAction(); got != controlapiv1.PresharedKeyAction_CLEAR {
+		t.Fatalf("new peer PSK action = %s, want CLEAR", got)
+	}
+}
+
 func TestApplyPeerEdits(t *testing.T) {
 	t.Parallel()
-	current := []*controlapiv1.DesiredPeer{
+	current := []*controlapiv1.PeerSpec{
 		testDesiredPeer("AAA=", "192.0.2.1:1", []string{"10.1.0.0/24"}),
 		testDesiredPeer("BBB=", "", []string{"10.2.0.0/24"}),
 	}
@@ -82,6 +93,9 @@ func TestApplyPeerEdits(t *testing.T) {
 	}
 	if edited[1].GetPublicKey() != "CCC=" || len(edited[1].GetAllowedIps()) != 2 {
 		t.Fatalf("added peer = %+v", edited[1])
+	}
+	if got := edited[1].GetPresharedKeyAction(); got != controlapiv1.PresharedKeyAction_CLEAR {
+		t.Fatalf("added peer PSK action = %s, want CLEAR", got)
 	}
 }
 
@@ -109,13 +123,18 @@ func TestParseKeepaliveRequiresStrictUnsignedInteger(t *testing.T) {
 
 func TestSetCommandSubmitsEditedSnapshot(t *testing.T) {
 	t.Parallel()
-	status := func(context.Context, string) (*controlapiv1.GetStatusResponse, error) {
-		return testStatusResponse(7, []*controlapiv1.PeerStatus{
+	status := func(context.Context, string, string) (*controlapiv1.InterfaceStatus, error) {
+		response := testStatusResponse(7, []*controlapiv1.PeerStatus{
 			testPeerStatus("AAA=", "", []string{"10.1.0.0/24"}, false),
-		}), nil
+		})
+		ref := controlapiv1.InterfaceRef_builder{}.Build()
+		ref.SetInterfaceName("wgf0")
+		ref.SetInterfaceInstanceId([]byte{1, 2, 3, 4})
+		response.SetRef(ref)
+		return response, nil
 	}
-	var got *controlapiv1.ApplyConfigRequest
-	apply := func(_ context.Context, _ string, request *controlapiv1.ApplyConfigRequest) (*controlapiv1.ApplyConfigResponse, error) {
+	var got *controlapiv1.ApplyPeersRequest
+	apply := func(_ context.Context, _ string, request *controlapiv1.ApplyPeersRequest) (*controlapiv1.ApplyPeersResponse, error) {
 		got = request
 		return testApplyResponse(8), nil
 	}
@@ -124,7 +143,9 @@ func TestSetCommandSubmitsEditedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.GetExpectedGeneration() != 7 || len(got.GetRequestId()) != 16 {
+	if got.GetTarget().GetInterfaceName() != "wgf0" ||
+		!bytes.Equal(got.GetMutation().GetExpectedInstanceId(), []byte{1, 2, 3, 4}) ||
+		got.GetMutation().GetExpectedGeneration() != 7 || len(got.GetMutation().GetRequestId()) != 16 {
 		t.Fatalf("request = %+v", got)
 	}
 	if len(got.GetPeers()) != 2 || got.GetPeers()[1].GetPublicKey() != "BBB=" {

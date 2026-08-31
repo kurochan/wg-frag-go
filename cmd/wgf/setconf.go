@@ -10,17 +10,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kurochan/wg-frag-go/controlapi"
 	"github.com/kurochan/wg-frag-go/internal/config"
-	"github.com/kurochan/wg-frag-go/internal/controlapi"
+	"github.com/kurochan/wg-frag-go/internal/controlconfig"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // applier is injected by tests; the default submits to the daemon socket.
 type applier func(
 	ctx context.Context,
 	socketPath string,
-	request *controlapiv1.ApplyConfigRequest,
-) (*controlapiv1.ApplyConfigResponse, error)
+	request *controlapiv1.ApplyPeersRequest,
+) (*controlapiv1.ApplyPeersResponse, error)
 
 // confMode distinguishes the three wg(8)-style file commands, which differ
 // only in how the file's peers merge with the running set.
@@ -49,7 +51,7 @@ func setconf(mode confMode, args []string, getStatus statusGetter, apply applier
 		return err
 	}
 	ctx := context.Background()
-	status, err := getStatus(ctx, socket)
+	status, err := getStatus(ctx, socket, ifname)
 	if err != nil {
 		return fmt.Errorf("is `wgf run %s` running? %w", ifname, err)
 	}
@@ -62,15 +64,29 @@ func setconf(mode confMode, args []string, getStatus statusGetter, apply applier
 	if encoded := base64.StdEncoding.EncodeToString(public[:]); encoded != status.GetPublicKey() {
 		return errors.New("the file's PrivateKey does not match the running interface; restart wgf run instead")
 	}
-	if uint16(status.GetListenPort()) != cfg.Interface.ListenPort || int(status.GetMtu()) != cfg.Interface.MTU {
-		return errors.New("the file's ListenPort or MTU does not match the running interface; restart wgf run instead")
+	if !restartSettingsEqual(ifname, status, cfg) {
+		return errors.New("the file's interface settings require RestartInterface or a wgf run restart")
 	}
 
 	desired := desiredFromConfig(cfg.Peers, mode != confAdd)
 	if mode == confAdd {
 		desired = mergePeers(desiredFromStatus(status.GetPeers()), desired)
 	}
-	return submit(ctx, socket, status.GetGeneration(), desired, apply, stdout)
+	return submit(ctx, ifname, socket, status.GetRef().GetInterfaceInstanceId(), status.GetGeneration(), desired, apply, stdout)
+}
+
+func restartSettingsEqual(ifname string, status *controlapiv1.InterfaceStatus, cfg *config.Config) bool {
+	if status == nil || cfg == nil || status.GetSpec() == nil {
+		return status != nil && cfg != nil &&
+			uint16(status.GetListenPort()) == cfg.Interface.ListenPort && int(status.GetMtu()) == cfg.Interface.MTU
+	}
+	running := proto.Clone(status.GetSpec()).(*controlapiv1.InterfaceSpec)
+	desired := controlconfig.SpecFromConfig(ifname, cfg, false)
+	running.SetPeers(nil)
+	desired.SetPeers(nil)
+	running.ClearPrivateKey()
+	desired.ClearPrivateKey()
+	return proto.Equal(running, desired)
 }
 
 func setCommand(args []string, getStatus statusGetter, apply applier, stdout io.Writer) error {
@@ -90,7 +106,7 @@ func setCommand(args []string, getStatus statusGetter, apply applier, stdout io.
 		rest = rest[2:]
 	}
 	ctx := context.Background()
-	status, err := getStatus(ctx, socket)
+	status, err := getStatus(ctx, socket, ifname)
 	if err != nil {
 		return fmt.Errorf("is `wgf run %s` running? %w", ifname, err)
 	}
@@ -98,11 +114,11 @@ func setCommand(args []string, getStatus statusGetter, apply applier, stdout io.
 	if desired, err = applyPeerEdits(desired, rest); err != nil {
 		return err
 	}
-	return submit(ctx, socket, status.GetGeneration(), desired, apply, stdout)
+	return submit(ctx, ifname, socket, status.GetRef().GetInterfaceInstanceId(), status.GetGeneration(), desired, apply, stdout)
 }
 
 // applyPeerEdits mutates the desired peer list with wg(8)-style directives.
-func applyPeerEdits(desired []*controlapiv1.DesiredPeer, args []string) ([]*controlapiv1.DesiredPeer, error) {
+func applyPeerEdits(desired []*controlapiv1.PeerSpec, args []string) ([]*controlapiv1.PeerSpec, error) {
 	index := func(key string) int {
 		for i, peer := range desired {
 			if peer.GetPublicKey() == key {
@@ -120,8 +136,9 @@ func applyPeerEdits(desired []*controlapiv1.DesiredPeer, args []string) ([]*cont
 		args = args[2:]
 		at := index(key)
 		if at < 0 {
-			peer := controlapiv1.DesiredPeer_builder{}.Build()
+			peer := controlapiv1.PeerSpec_builder{}.Build()
 			peer.SetPublicKey(key)
+			peer.SetPresharedKeyAction(controlapiv1.PresharedKeyAction_CLEAR)
 			desired = append(desired, peer)
 			at = len(desired) - 1
 		}
@@ -187,14 +204,14 @@ func parseKeepalive(value string) (uint32, error) {
 	return uint32(seconds), nil
 }
 
-func desiredFromConfig(peers []config.Peer, clearMissingPSK bool) []*controlapiv1.DesiredPeer {
-	desired := make([]*controlapiv1.DesiredPeer, len(peers))
+func desiredFromConfig(peers []config.Peer, clearMissingPSK bool) []*controlapiv1.PeerSpec {
+	desired := make([]*controlapiv1.PeerSpec, len(peers))
 	for i, peer := range peers {
 		allowed := make([]string, len(peer.AllowedIPs))
 		for j, prefix := range peer.AllowedIPs {
 			allowed[j] = prefix.String()
 		}
-		desired[i] = controlapiv1.DesiredPeer_builder{}.Build()
+		desired[i] = controlapiv1.PeerSpec_builder{}.Build()
 		desired[i].SetPublicKey(base64.StdEncoding.EncodeToString(peer.PublicKey[:]))
 		desired[i].SetEndpoint(peer.Endpoint)
 		desired[i].SetAllowedIps(allowed)
@@ -210,10 +227,10 @@ func desiredFromConfig(peers []config.Peer, clearMissingPSK bool) []*controlapiv
 	return desired
 }
 
-func desiredFromStatus(peers []*controlapiv1.PeerStatus) []*controlapiv1.DesiredPeer {
-	desired := make([]*controlapiv1.DesiredPeer, len(peers))
+func desiredFromStatus(peers []*controlapiv1.PeerStatus) []*controlapiv1.PeerSpec {
+	desired := make([]*controlapiv1.PeerSpec, len(peers))
 	for i, peer := range peers {
-		desired[i] = controlapiv1.DesiredPeer_builder{}.Build()
+		desired[i] = controlapiv1.PeerSpec_builder{}.Build()
 		desired[i].SetPublicKey(peer.GetPublicKey())
 		desired[i].SetEndpoint(peer.GetEndpoint())
 		desired[i].SetAllowedIps(peer.GetAllowedIps())
@@ -228,8 +245,8 @@ func desiredFromStatus(peers []*controlapiv1.PeerStatus) []*controlapiv1.Desired
 }
 
 // mergePeers overlays additions onto base by public key, as addconf does.
-func mergePeers(base, additions []*controlapiv1.DesiredPeer) []*controlapiv1.DesiredPeer {
-	merged := append([]*controlapiv1.DesiredPeer(nil), base...)
+func mergePeers(base, additions []*controlapiv1.PeerSpec) []*controlapiv1.PeerSpec {
+	merged := append([]*controlapiv1.PeerSpec(nil), base...)
 
 	for _, addition := range additions {
 		replaced := false
@@ -246,20 +263,30 @@ func mergePeers(base, additions []*controlapiv1.DesiredPeer) []*controlapiv1.Des
 			}
 		}
 		if !replaced {
+			if addition.GetPresharedKeyAction() == controlapiv1.PresharedKeyAction_PRESERVE {
+				addition.SetPresharedKeyAction(controlapiv1.PresharedKeyAction_CLEAR)
+			}
 			merged = append(merged, addition)
 		}
 	}
 	return merged
 }
 
-func submit(ctx context.Context, socket string, generation uint64,
-	desired []*controlapiv1.DesiredPeer, apply applier, stdout io.Writer) error {
+func submit(ctx context.Context, ifname, socket string, instanceID []byte, generation uint64,
+	desired []*controlapiv1.PeerSpec, apply applier, stdout io.Writer) error {
 	requestID := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, requestID); err != nil {
 		return err
 	}
-	request := controlapiv1.ApplyConfigRequest_builder{RequestId: requestID, Peers: desired}.Build()
-	request.SetExpectedGeneration(generation)
+	target := controlapiv1.InterfaceRef_builder{}.Build()
+	target.SetInterfaceName(ifname)
+	mutation := controlapiv1.MutationContext_builder{}.Build()
+	if len(instanceID) != 0 {
+		mutation.SetExpectedInstanceId(instanceID)
+	}
+	mutation.SetExpectedGeneration(generation)
+	mutation.SetRequestId(requestID)
+	request := controlapiv1.ApplyPeersRequest_builder{Target: target, Mutation: mutation, Peers: desired}.Build()
 	response, err := apply(ctx, socket, request)
 	if err != nil {
 		return err

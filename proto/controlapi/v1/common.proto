@@ -1,0 +1,31 @@
+edition = "2024";
+
+package wgf.controlapi.v1;
+
+option go_package = "github.com/kurochan/wg-frag-go/proto/controlapi/v1;controlapiv1";
+
+// InterfaceRef identifies an interface and, when present, its current
+// process-local instance. The instance ID prevents a stale request from
+// affecting an interface that was deleted and recreated with the same name.
+message InterfaceRef {
+  string interface_name = 1;
+  bytes interface_instance_id = 2;
+}
+
+// InterfaceLifecycle describes the state of an interface supervisor.
+enum InterfaceLifecycle {
+  INTERFACE_LIFECYCLE_UNSPECIFIED = 0;
+  INTERFACE_LIFECYCLE_CREATING = 1;
+  INTERFACE_LIFECYCLE_RUNNING = 2;
+  INTERFACE_LIFECYCLE_RESTARTING = 3;
+  INTERFACE_LIFECYCLE_DELETING = 4;
+  INTERFACE_LIFECYCLE_ROLLING_BACK = 5;
+  INTERFACE_LIFECYCLE_ERROR = 6;
+}
+
+// MutationContext protects a change against an outdated interface snapshot.
+message MutationContext {
+  bytes expected_instance_id = 1;
+  uint64 expected_generation = 2;
+  bytes request_id = 3;
+}

@@ -9,6 +9,7 @@ PartOf=wgf.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/wgf quick up %i
+ExecReload=/usr/bin/wgf quick reload %i
 ExecStop=/usr/bin/wgf quick down %i
 
 [Install]

@@ -34,7 +34,7 @@ AllowedIPs = 192.0.2.0/24
 	}.Build()
 	peer.SetPresharedKey(psk)
 	peer.SetMetricsId("edge-a")
-	status := controlapiv1.GetStatusResponse_builder{Peers: []*controlapiv1.PeerStatus{peer}}.Build()
+	status := controlapiv1.InterfaceStatus_builder{Peers: []*controlapiv1.PeerStatus{peer}}.Build()
 
 	rendered, err := renderSavedConfig(source, status)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestRenderSavedConfigRecognizesCommentedPeerHeader(t *testing.T) {
 	t.Parallel()
 	source := "[Interface]\nPrivateKey = GGHiF3lJmZSPqQfHelxSTObVh8lGYbBAyTNTdEIsuEc=\n\n[ Peer ] # home\nPublicKey = stale\n"
 	key := "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
-	status := controlapiv1.GetStatusResponse_builder{Peers: []*controlapiv1.PeerStatus{
+	status := controlapiv1.InterfaceStatus_builder{Peers: []*controlapiv1.PeerStatus{
 		controlapiv1.PeerStatus_builder{PublicKey: &key}.Build(),
 	}}.Build()
 	if _, err := renderSavedConfig(source, status); err != nil {

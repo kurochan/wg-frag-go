@@ -31,7 +31,8 @@ the underlying WireGuard session but cannot exchange WGF carriers.
 - Runtime DPLPMTUD based on RFC 8899, starting from a safe 613-byte carrier
   payload and adapting to the path.
 - WireGuard-style multi-peer configuration, `AllowedIPs` selection and ingress
-  source validation, plus a local gRPC control API and systemd support.
+  source validation, plus a transport-independent Go manager API, local gRPC
+  adapter, multi-interface ownership, and systemd support.
 
 Read the [wire protocol](docs/protocol.md) for the compatibility boundary and
 state-machine rules.
@@ -48,8 +49,9 @@ full results, and local validation.
 ## Quick start
 
 WGF runs on Linux amd64/arm64 and macOS amd64/arm64. Linux supports both
-`wgf run` and `wgf quick`; macOS currently supports `wgf run` only. Interface
-creation and route management require root or equivalent network privileges.
+`wgf run`, `wgf manager`, and `wgf quick`; macOS supports `wgf run` and
+`wgf manager`. Interface creation and route management require root or
+equivalent network privileges.
 
 Install on a supported Ubuntu release from the Launchpad PPA:
 
@@ -79,6 +81,8 @@ diagnostics, and upgrade behavior are in [Installation and operations](docs/inst
   starting, diagnostics, AppArmor, and upgrades.
 - [Configuration reference](docs/configuration.md): all interface, peer, and
   WGF-specific settings.
+- [Control API](docs/control-api.md): the in-process Go API, public gRPC API,
+  multi-interface manager, lifecycle, and mutation rules.
 - [Wire protocol](docs/protocol.md): carrier formats, capabilities, PMTU, and
   reassembly behavior.
 - [Security model](docs/threat-model.md): trust boundary, validation, and

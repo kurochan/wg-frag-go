@@ -78,6 +78,11 @@ jobs:
       - name: Run static analysis
         run: go vet ./...
 
+      - name: Verify public API cross-platform builds
+        run: |
+          GOOS=windows GOARCH=amd64 go build ./manager ./controlapi
+          GOOS=freebsd GOARCH=amd64 go build ./manager ./controlapi
+
       - name: Install Linux networking tools
         run: |
           sudo apt-get update
@@ -85,6 +90,9 @@ jobs:
 
       - name: Run network-namespace integration
         run: sudo env PATH="$PATH" HOME="$HOME" make test-netns
+
+      - name: Run manager network-namespace integration
+        run: sudo env PATH="$PATH" HOME="$HOME" make test-netns-manager
 
   macos:
     name: Go Checks / macOS

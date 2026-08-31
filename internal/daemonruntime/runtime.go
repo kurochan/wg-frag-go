@@ -1,9 +1,8 @@
-package main
+package daemonruntime
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kurochan/wg-frag-go/internal/config"
+	"github.com/kurochan/wg-frag-go/internal/controlconfig"
 	"github.com/kurochan/wg-frag-go/internal/controlplane"
 	controlstate "github.com/kurochan/wg-frag-go/internal/core/control/state"
 	"github.com/kurochan/wg-frag-go/internal/core/datapath"
@@ -30,19 +30,16 @@ import (
 	"github.com/kurochan/wg-frag-go/internal/wgadapter/shimtun"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
 	"golang.zx2c4.com/wireguard/device"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
-	requestCacheEntries             = 256
-	requestCacheLifetime            = 10 * time.Minute
 	controlQueueSize                = 16
 	defaultReorderCapacity          = 64
 	carrierQueueSlotLimitMultiplier = limits.MaxFragments * 2
 )
 
 // controlSink fans CONTROL out to the bridge owning each peer. The table is
-// mutable because ApplyConfig adds and removes bridges at runtime while
+// mutable because ApplyPeers adds and removes bridges at runtime while
 // wireguard-go receive goroutines keep delivering frames.
 type controlSink struct {
 	mu      sync.RWMutex
@@ -75,7 +72,7 @@ func (s *controlSink) bridgeFor(peer peerroute.PeerID) *controlbridge.Bridge {
 func (s *controlSink) DeliverControl(peer peerroute.PeerID, frame []byte) error {
 	bridge := s.bridgeFor(peer)
 	if bridge == nil {
-		// A carrier can already be in flight when ApplyConfig removes its peer.
+		// A carrier can already be in flight when ApplyPeers removes its peer.
 		// It is authenticated but stale, so dropping it must not fail the TUN.
 		return nil
 	}
@@ -88,12 +85,6 @@ func (s *controlSink) ReportUnknownDataSession(peer peerroute.PeerID, sessionID 
 		return nil
 	}
 	return bridge.ReportUnknownDataSession(peer, sessionID)
-}
-
-type appliedRequest struct {
-	hash   [32]byte
-	result *controlapiv1.ApplyConfigResponse
-	at     time.Time
 }
 
 type runtimeFaultScope uint8
@@ -130,8 +121,6 @@ type daemonRuntime struct {
 	sink       *controlSink
 	bridges    map[peerroute.PeerID]*controlbridge.Bridge
 
-	generation uint64
-	requests   map[[16]byte]appliedRequest
 	peerFaults map[peerroute.PeerID]peerFaultState
 	logger     *slog.Logger
 	batchSize  int
@@ -232,7 +221,7 @@ func (rt *daemonRuntime) handleBridgeErrorLocked(now time.Time, id peerroute.Pee
 
 	if disableErr := rt.shim.SetDataEnabled(id, false); disableErr != nil {
 		if errors.Is(disableErr, shimtun.ErrPeerNotFound) {
-			// ApplyConfig may have removed this peer while its CONTROL callback
+			// ApplyPeers may have removed this peer while its CONTROL callback
 			// was in flight. The peer is already dark and no interface-wide
 			// recovery is required.
 			delete(rt.peerFaults, id)
@@ -320,8 +309,8 @@ func peerIDsForEndpoint(plan wgadapter.Plan, uapi string, endpoint netip.AddrPor
 	return matched
 }
 
-// status is the GetStatus handler.
-func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*controlapiv1.GetStatusResponse, error) {
+// status assembles one runtime generation's observable interface state.
+func (rt *daemonRuntime) status(includeSecrets bool) (*controlapiv1.InterfaceStatus, error) {
 	rt.mu.Lock()
 	if rt.fatal != nil {
 		err := rt.fatal
@@ -331,15 +320,12 @@ func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*contro
 	ifname := rt.ifname
 	cfg := *rt.cfg
 	plan := rt.plan
-	generation := rt.generation
 	bridges := make(map[peerroute.PeerID]*controlbridge.Bridge, len(rt.bridges))
 	for id, bridge := range rt.bridges {
 		bridges[id] = bridge
 	}
 	rt.mu.Unlock()
 
-	stats := rt.shim.Stats()
-	dropsV4, dropsV6 := rt.bind.SocketDrops()
 	indexByHexKey := make(map[string]int, len(plan.Peers))
 	metricsIDs := make(map[config.Key]string, len(cfg.Peers))
 	for _, configured := range cfg.Peers {
@@ -373,15 +359,36 @@ func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*contro
 		}
 		peers[i] = status
 	}
+	counters := rt.counterSnapshot()
+	response := controlapiv1.InterfaceStatus_builder{}.Build()
+	ref := controlapiv1.InterfaceRef_builder{}.Build()
+	ref.SetInterfaceName(ifname)
+	response.SetRef(ref)
+	response.SetLifecycle(controlapiv1.InterfaceLifecycle_INTERFACE_LIFECYCLE_RUNNING)
+	response.SetPublicKey(base64.StdEncoding.EncodeToString(plan.LocalPublicKey[:]))
+	response.SetListenPort(uint32(cfg.Interface.ListenPort))
+	response.SetMtu(uint32(cfg.Interface.MTU))
+	response.SetSpec(controlconfig.SpecFromConfig(ifname, &cfg, includeSecrets))
+	response.SetPeers(peers)
+	response.SetCounters(counters)
+	rt.fillWireGuardCounters(indexByHexKey, peers)
+	return response, nil
+}
+
+func (rt *daemonRuntime) counterSnapshot() *controlapiv1.ShimCounters {
+	stats := rt.shim.Stats()
+	dropsV4, dropsV6 := rt.bind.SocketDrops()
 	counters := controlapiv1.ShimCounters_builder{}.Build()
 	counters.SetTxCarriers(stats.TXCarriers)
 	counters.SetTxPacketDrops(stats.TXPacketDrops)
+	counters.SetTxNativeFragmentDrops(stats.TXNativeFragmentDrops)
 	counters.SetTxRouteDrops(stats.TXRouteDrops)
 	counters.SetTxPeerMtuDrops(stats.TXPeerMTUDrops)
 	counters.SetTxPtbSent(stats.TXPTBSent)
 	counters.SetRxDataCarriers(stats.RXDataCarriers)
 	counters.SetRxInnerDelivered(stats.RXInnerDelivered)
 	counters.SetRxPacketRejects(stats.RXPacketRejects)
+	counters.SetRxNativeFragmentDrops(stats.RXNativeFragmentDrops)
 	counters.SetRxSourceSpoofDrops(stats.RXSourceSpoofDrops)
 	counters.SetRxNativeWriteDrops(stats.RXNativeWriteDrops)
 	counters.SetCarrierQueueOverflows(stats.CarrierQueueOverflows)
@@ -394,16 +401,7 @@ func (rt *daemonRuntime) status(_ context.Context, includeSecrets bool) (*contro
 	counters.SetPreconfirmDrops(stats.PreconfirmDrops)
 	counters.SetReassemblyExpirations(stats.ReassemblyExpirations)
 	counters.SetUdpSocketDrops(dropsV4 + dropsV6)
-	response := controlapiv1.GetStatusResponse_builder{}.Build()
-	response.SetInterfaceName(ifname)
-	response.SetPublicKey(base64.StdEncoding.EncodeToString(plan.LocalPublicKey[:]))
-	response.SetListenPort(uint32(cfg.Interface.ListenPort))
-	response.SetMtu(uint32(cfg.Interface.MTU))
-	response.SetPeers(peers)
-	response.SetGeneration(generation)
-	response.SetCounters(counters)
-	rt.fillWireGuardCounters(indexByHexKey, peers)
-	return response, nil
+	return counters
 }
 
 func (rt *daemonRuntime) fillWireGuardCounters(indexByHexKey map[string]int, peers []*controlapiv1.PeerStatus) {
@@ -443,65 +441,20 @@ func (rt *daemonRuntime) fillWireGuardCounters(indexByHexKey map[string]int, pee
 	}
 }
 
-// apply is the ApplyConfig handler. It publishes the new peer table
+// applyPeers publishes a complete desired peer table
 // fail-closed: a peer whose control plane cannot start is reported in its
 // result and stays dark instead of reverting the whole change.
-//
-//nolint:cyclop,funlen // ApplyConfig coordinates validation and ordered rollback across layers.
-func (rt *daemonRuntime) apply(
-	_ context.Context,
-	request *controlapiv1.ApplyConfigRequest,
-) (*controlapiv1.ApplyConfigResponse, error) {
-	requestID, err := parseRequestID(request.GetRequestId())
-	if err != nil {
-		return nil, err
-	}
-	hash, err := snapshotHash(request.GetPeers())
-	if err != nil {
-		return nil, err
-	}
+func (rt *daemonRuntime) applyPeers(
+	request *controlapiv1.ApplyPeersRequest,
+) (*controlapiv1.ApplyPeersResponse, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	if rt.fatal != nil {
 		return nil, rt.fatal
 	}
-	now := time.Now()
-	rt.pruneRequestCacheLocked(now)
-	if cached, seen := rt.requests[requestID]; seen {
-		if cached.hash != hash {
-			return nil, errors.New("request_id was already used with a different snapshot")
-		}
-		return cached.result, nil
-	}
-	if request.GetExpectedGeneration() != rt.generation {
-		return nil, fmt.Errorf("generation conflict: expected %d, current %d", request.GetExpectedGeneration(), rt.generation)
-	}
-	desired := make([]config.Peer, len(request.GetPeers()))
-	for i, peer := range request.GetPeers() {
-		var psk []byte
-		switch peer.GetPresharedKeyAction() {
-		case controlapiv1.PresharedKeyAction_SET:
-			psk = peer.GetPresharedKey()
-		case controlapiv1.PresharedKeyAction_PRESERVE:
-			for _, oldPeer := range rt.cfg.Peers {
-				encoded := base64.StdEncoding.EncodeToString(oldPeer.PublicKey[:])
-				if encoded == peer.GetPublicKey() && oldPeer.PresharedKey != nil {
-					psk = oldPeer.PresharedKey[:]
-					break
-				}
-			}
-		case controlapiv1.PresharedKeyAction_CLEAR:
-		default:
-			return nil, fmt.Errorf("peer %d: invalid preshared-key action", i+1)
-		}
-		desired[i], err = config.NewPeerWithPresharedKeyBytes(
-			peer.GetPublicKey(), peer.GetEndpoint(), peer.GetAllowedIps(),
-			peer.GetPersistentKeepaliveSec(), psk,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("peer %d: %w", i+1, err)
-		}
-		desired[i].MetricsID = peer.GetMetricsId()
+	desired, err := controlconfig.PeersFromSpec(request.GetPeers(), rt.cfg)
+	if err != nil {
+		return nil, err
 	}
 	if err := config.ValidatePeers(desired); err != nil {
 		return nil, err
@@ -522,9 +475,9 @@ func (rt *daemonRuntime) apply(
 		}
 		added[peer.ID] = base
 	}
-	// Keep the old control maps intact until all three tables agree. Install the
-	// WireGuard peer first: until the facade is updated, a new peer can only be
-	// dropped and cannot be attributed to an existing shim peer.
+	// Detach removed peers before publishing any new table. Detach drains
+	// in-flight callbacks so a reused peer ID cannot be reached through an old
+	// bridge while the WireGuard, facade, and shim snapshots change.
 	removedIDs := make([]peerroute.PeerID, len(update.Removed))
 	for i, peer := range update.Removed {
 		removedIDs[i] = peer.ID
@@ -533,13 +486,19 @@ func (rt *daemonRuntime) apply(
 	// reused ID from routing a new peer's CONTROL frame to the old bridge.
 	for _, peer := range update.Removed {
 		rt.sink.remove(peer.ID)
+		if bridge := rt.bridges[peer.ID]; bridge != nil {
+			bridge.Detach()
+		}
 	}
-	if err := rt.wg.IpcSet(update.UAPI); err != nil {
+	restoreRemovedBridges := func() {
 		for _, peer := range update.Removed {
 			if bridge := rt.bridges[peer.ID]; bridge != nil {
+				bridge.Attach()
 				rt.sink.set(peer.ID, bridge)
 			}
 		}
+	}
+	if err := rt.wg.IpcSet(update.UAPI); err != nil {
 		wgRollbackErr := wgadapter.Apply(rt.wg, rt.plan)
 		if wgRollbackErr != nil {
 			return nil, rt.failClosed(errors.Join(
@@ -547,16 +506,12 @@ func (rt *daemonRuntime) apply(
 				fmt.Errorf("wireguard rollback: %w", wgRollbackErr),
 			))
 		}
+		restoreRemovedBridges()
 		return nil, fmt.Errorf("wireguard update: %w", err)
 	}
 	if err := rt.wgTUN.ReconfigureWithShim(update.Plan, func() error {
 		return rt.shim.Reconfigure(added, removedIDs, update.Plan.Routes)
 	}); err != nil {
-		for _, peer := range update.Removed {
-			if bridge := rt.bridges[peer.ID]; bridge != nil {
-				rt.sink.set(peer.ID, bridge)
-			}
-		}
 		wgRollbackErr := wgadapter.Apply(rt.wg, rt.plan)
 		if wgRollbackErr != nil {
 			return nil, rt.failClosed(errors.Join(
@@ -564,6 +519,7 @@ func (rt *daemonRuntime) apply(
 				fmt.Errorf("wireguard rollback: %w", wgRollbackErr),
 			))
 		}
+		restoreRemovedBridges()
 		return nil, fmt.Errorf("reconfigure shim/facade: %w", err)
 	}
 	// The shim transaction has already published the new routing snapshot.
@@ -577,7 +533,6 @@ func (rt *daemonRuntime) apply(
 	}
 
 	for _, peer := range update.Removed {
-		rt.sink.remove(peer.ID)
 		delete(rt.bridges, peer.ID)
 		delete(rt.peerFaults, peer.ID)
 	}
@@ -607,7 +562,7 @@ func (rt *daemonRuntime) apply(
 		return nil
 	}
 
-	response := controlapiv1.ApplyConfigResponse_builder{}.Build()
+	response := controlapiv1.ApplyPeersResponse_builder{}.Build()
 
 	results := make([]*controlapiv1.PeerResult, 0, len(update.Added)+len(update.Survivors))
 	for _, peer := range update.Added {
@@ -627,7 +582,7 @@ func (rt *daemonRuntime) apply(
 		}
 		result := controlapiv1.PeerResult_builder{}.Build()
 		result.SetPublicKey(base64.StdEncoding.EncodeToString(peer.PublicKey[:]))
-		// A previous ApplyConfig may have installed the peer in the shim and
+		// A previous ApplyPeers may have installed the peer in the shim and
 		// UAPI but failed while starting its control bridge. Retry that cold
 		// path on the next snapshot instead of leaving the peer dark forever.
 		if rt.bridges[peer.ID] == nil {
@@ -647,17 +602,12 @@ func (rt *daemonRuntime) apply(
 
 	rt.cfg = &newCfg
 	rt.plan = update.Plan
-	rt.generation++
 	logMemoryReservation(rt.logger, rt.cfg, len(update.Plan.Peers), rt.batchSize)
 
 	response.SetResults(results)
-	response.SetGeneration(rt.generation)
-	rt.cacheRequest(requestID, hash, response)
 	rt.log(
 		slog.LevelInfo,
 		"configuration applied",
-		"generation",
-		rt.generation,
 		"added_peers",
 		len(update.Added),
 		"removed_peers",
@@ -672,64 +622,6 @@ func (rt *daemonRuntime) log(level slog.Level, message string, args ...any) {
 	if rt.logger != nil {
 		rt.logger.Log(context.Background(), level, message, args...)
 	}
-}
-
-func (rt *daemonRuntime) cacheRequest(id [16]byte, hash [32]byte, result *controlapiv1.ApplyConfigResponse) {
-	now := time.Now()
-	rt.pruneRequestCacheLocked(now)
-	if len(rt.requests) >= requestCacheEntries {
-		oldest, oldestAt := [16]byte{}, now
-		for key, entry := range rt.requests {
-			if entry.at.Before(oldestAt) {
-				oldest, oldestAt = key, entry.at
-			}
-		}
-		delete(rt.requests, oldest)
-	}
-	rt.requests[id] = appliedRequest{hash: hash, result: result, at: now}
-}
-
-func (rt *daemonRuntime) pruneRequestCacheLocked(now time.Time) {
-	for key, entry := range rt.requests {
-		if now.Sub(entry.at) > requestCacheLifetime {
-			delete(rt.requests, key)
-		}
-	}
-}
-
-func parseRequestID(raw []byte) ([16]byte, error) {
-	var id [16]byte
-	if len(raw) != len(id) {
-		return id, errors.New("request_id must be exactly 16 bytes")
-	}
-	copy(id[:], raw)
-	if id == ([16]byte{}) {
-		return id, errors.New("request_id must be nonzero")
-	}
-	return id, nil
-}
-
-// snapshotHash canonicalizes the desired peer list so retries of the same
-// request are recognized byte-for-byte.
-func snapshotHash(peers []*controlapiv1.DesiredPeer) ([32]byte, error) {
-	marshal := proto.MarshalOptions{Deterministic: true}
-	digest := sha256.New()
-
-	for _, peer := range peers {
-		encoded, err := marshal.Marshal(peer)
-		if err != nil {
-			return [32]byte{}, err
-		}
-
-		var length [8]byte
-		binary.BigEndian.PutUint64(length[:], uint64(len(encoded)))
-		_, _ = digest.Write(length[:])
-		_, _ = digest.Write(encoded)
-	}
-
-	var hash [32]byte
-	copy(hash[:], digest.Sum(nil))
-	return hash, nil
 }
 
 func peerLogger(logger *slog.Logger, peer wgadapter.PeerPlan) *slog.Logger {
@@ -856,11 +748,4 @@ func newEngine(cfg *config.Config) (*controlplane.Engine, error) {
 			}),
 		},
 	})
-}
-
-func minDuration(left, right time.Duration) time.Duration {
-	if left < right {
-		return left
-	}
-	return right
 }

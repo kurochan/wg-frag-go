@@ -32,6 +32,7 @@ import (
 const (
 	netNSHelperEnv  = "WGF_NETNS_HELPER"
 	netNSSocketEnv  = "WGF_NETNS_CONTROL_SOCKET"
+	netNSManagerEnv = "WGF_NETNS_MANAGER"
 	netNSCPUProfile = "WGF_NETNS_CPU_PROFILE"
 	// These opt-in scenarios deliberately exercise recovery paths without
 	// changing the daemon or invoking iproute2 from the test process.
@@ -82,6 +83,14 @@ func TestWGFNetNSRunHelper(t *testing.T) {
 		signal.Notify(signals, syscall.SIGTERM, os.Interrupt)
 		defer signal.Stop(signals)
 		<-signals
+		return
+	}
+	if os.Getenv(netNSManagerEnv) == "1" {
+		args := []string{"--control-socket", os.Getenv(netNSSocketEnv), "--max-interfaces", "4"}
+		if err := managerCommand(args, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "netns manager:", err)
+			os.Exit(1)
+		}
 		return
 	}
 	args := []string{ifname, "--config", path}
@@ -247,11 +256,12 @@ func logRunnerStats(t *testing.T, runners ...*netNSRunner) {
 }
 
 type netNSRunner struct {
-	cmd      *exec.Cmd
-	ns       netns.NsHandle
-	logs     *lockedBuffer
-	vethName string
-	stopOnce sync.Once
+	cmd        *exec.Cmd
+	ns         netns.NsHandle
+	logs       *lockedBuffer
+	socketPath string
+	vethName   string
+	stopOnce   sync.Once
 }
 
 // runnerSocketDir is a short private directory; a t.TempDir path would exceed
@@ -270,6 +280,14 @@ func runnerSocketDir(t *testing.T) string {
 }
 
 func startNetNSRunner(t *testing.T, ifname, config, profileDir string) *netNSRunner {
+	return startNetNSRunnerMode(t, ifname, config, profileDir, false)
+}
+
+func startNetNSManagerRunner(t *testing.T, ifname string) *netNSRunner {
+	return startNetNSRunnerMode(t, ifname, "", "", true)
+}
+
+func startNetNSRunnerMode(t *testing.T, ifname, config, profileDir string, manager bool) *netNSRunner {
 	t.Helper()
 	logs := new(lockedBuffer)
 	cmd := exec.Command(os.Args[0], "-test.run", "^TestWGFNetNSHoldHelper$")
@@ -279,6 +297,9 @@ func startNetNSRunner(t *testing.T, ifname, config, profileDir string) *netNSRun
 	socket := filepath.Join(runnerSocketDir(t), ifname+".sock")
 	cmd.Env = append(replaceEnv(os.Environ(), netNSHelperEnv, helperHold),
 		"WGF_NETNS_IFNAME="+ifname, "WGF_NETNS_CONFIG="+config, netNSSocketEnv+"="+socket)
+	if manager {
+		cmd.Env = append(cmd.Env, netNSManagerEnv+"=1")
+	}
 	if profileDir != "" {
 		cmd.Env = append(cmd.Env, netNSCPUProfile+"="+filepath.Join(profileDir, ifname+".cpu.pprof"))
 	}
@@ -299,7 +320,7 @@ func startNetNSRunner(t *testing.T, ifname, config, profileDir string) *netNSRun
 		_ = cmd.Wait()
 		t.Fatalf("open child netns: %v", err)
 	}
-	runner := &netNSRunner{cmd: cmd, ns: ns, logs: logs}
+	runner := &netNSRunner{cmd: cmd, ns: ns, logs: logs, socketPath: socket}
 	t.Cleanup(func() { runner.stop(t) })
 	return runner
 }
@@ -516,8 +537,12 @@ func withNetNS(target netns.NsHandle, fn func() error) (returnErr error) {
 }
 
 func exchangeUDP(t *testing.T, from, to netns.NsHandle, size int) {
+	exchangeUDPAddresses(t, from, to, "10.1.0.1:0", "10.2.0.1:49001", size)
+}
+
+func exchangeUDPAddresses(t *testing.T, from, to netns.NsHandle, local, remote string, size int) {
 	t.Helper()
-	server := listenUDPInNS(t, to, "10.2.0.1:49001")
+	server := listenUDPInNS(t, to, remote)
 	defer server.Close()
 	go func() {
 		_ = server.SetDeadline(time.Now().Add(15 * time.Second))
@@ -535,7 +560,7 @@ func exchangeUDP(t *testing.T, from, to netns.NsHandle, size int) {
 			_, _ = server.WriteToUDP(buf[:n], peer)
 		}
 	}()
-	client := dialUDPInNS(t, from, "10.1.0.1:0", "10.2.0.1:49001")
+	client := dialUDPInNS(t, from, local, remote)
 	defer client.Close()
 	payload := make([]byte, size)
 	for i := range payload {

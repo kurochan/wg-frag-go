@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +17,6 @@ import (
 
 	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/metrics"
-	"github.com/kurochan/wg-frag-go/internal/version"
-	"github.com/kurochan/wg-frag-go/internal/wgadapter/shimtun"
 )
 
 const openMetricsContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
@@ -32,6 +29,13 @@ type metricsServer struct {
 
 func startMetricsServer(iface config.Interface, port uint16, logger *slog.Logger, snapshot func() metrics.Snapshot) (*metricsServer, error) {
 	return startMetricsServerWithListen(iface, port, logger, snapshot, net.Listen)
+}
+
+func startMetricsServerRenderer(iface config.Interface, port uint16, logger *slog.Logger, render func() ([]byte, error)) (*metricsServer, error) {
+	if _, err := metrics.NewSelector(iface.MetricsInclude, iface.MetricsExclude); err != nil {
+		return nil, err
+	}
+	return startMetricsServerRendererWithListen(iface, port, logger, render, net.Listen)
 }
 
 type metricsListenFunc func(network, address string) (net.Listener, error)
@@ -47,12 +51,29 @@ func startMetricsServerWithListen(
 	if err != nil {
 		return nil, err
 	}
+	render := func() ([]byte, error) {
+		var body bytes.Buffer
+		if err := metrics.WriteOpenMetrics(&body, selector, snapshot()); err != nil {
+			return nil, err
+		}
+		return body.Bytes(), nil
+	}
+	return startMetricsServerRendererWithListen(iface, port, logger, render, listen)
+}
+
+func startMetricsServerRendererWithListen(
+	iface config.Interface,
+	port uint16,
+	logger *slog.Logger,
+	render func() ([]byte, error),
+	listen metricsListenFunc,
+) (*metricsServer, error) {
 	addresses, err := metricsAddresses(iface.MetricsListen, port)
 	if err != nil {
 		return nil, err
 	}
 	server := &metricsServer{}
-	cache := newMetricsResponseCache(selector, snapshot)
+	cache := newMetricsResponseCache(render)
 	boundAddresses := make([]string, 0, len(addresses))
 	handler := http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/metrics" {
@@ -80,7 +101,7 @@ func startMetricsServerWithListen(
 		if listenErr != nil {
 			if iface.MetricsListen.Auto {
 				if logger != nil {
-					logger.Warn("metrics loopback listener unavailable", "address", address, "error", listenErr)
+					logger.Warn("metrics loopback address is unavailable", "address", address, "error", listenErr)
 				}
 				continue
 			}
@@ -95,7 +116,7 @@ func startMetricsServerWithListen(
 		}
 	}
 	if len(server.listeners) == 0 {
-		return nil, errors.New("no metrics listener could be started")
+		return nil, errors.New("no metrics listener could be opened")
 	}
 	for _, listener := range server.listeners {
 		httpServer := &http.Server{
@@ -159,15 +180,14 @@ func (server *metricsServer) Close() error {
 }
 
 type metricsResponseCache struct {
-	mu       sync.Mutex
-	selector metrics.Selector
-	snapshot func() metrics.Snapshot
-	body     []byte
-	at       time.Time
+	mu     sync.Mutex
+	render func() ([]byte, error)
+	body   []byte
+	at     time.Time
 }
 
-func newMetricsResponseCache(selector metrics.Selector, snapshot func() metrics.Snapshot) *metricsResponseCache {
-	return &metricsResponseCache{selector: selector, snapshot: snapshot}
+func newMetricsResponseCache(render func() ([]byte, error)) *metricsResponseCache {
+	return &metricsResponseCache{render: render}
 }
 
 func (cache *metricsResponseCache) get() ([]byte, error) {
@@ -176,11 +196,11 @@ func (cache *metricsResponseCache) get() ([]byte, error) {
 	if time.Since(cache.at) < metricsCacheTTL {
 		return cache.body, nil
 	}
-	var body bytes.Buffer
-	if err := metrics.WriteOpenMetrics(&body, cache.selector, cache.snapshot()); err != nil {
+	body, err := cache.render()
+	if err != nil {
 		return nil, err
 	}
-	cache.body = body.Bytes()
+	cache.body = body
 	cache.at = time.Now()
 	return cache.body, nil
 }
@@ -206,79 +226,4 @@ func isLoopbackMetricsAddress(address string) bool {
 	}
 	parsed := net.ParseIP(host)
 	return parsed != nil && parsed.IsLoopback()
-}
-
-func effectiveListenPort(uapi string) (uint16, error) {
-	for line := range strings.Lines(uapi) {
-		value, ok := strings.CutPrefix(line, "listen_port=")
-		if !ok {
-			continue
-		}
-		port, err := strconv.ParseUint(strings.TrimSpace(value), 10, 16)
-		if err != nil || port == 0 {
-			return 0, errors.New("WireGuard reported an invalid listen port")
-		}
-		return uint16(port), nil
-	}
-	return 0, errors.New("WireGuard did not report a listen port")
-}
-
-func (rt *daemonRuntime) metricsSnapshot() metrics.Snapshot {
-	stats := rt.shim.Stats()
-	dropsV4, dropsV6 := rt.bind.SocketDrops()
-	interfaceLabels := map[string]string{"interface": rt.ifname}
-	snapshot := metrics.Snapshot{
-		BuildLabels: map[string]string{
-			"version":    version.Version,
-			"commit":     version.Commit,
-			"go_version": runtime.Version(),
-		},
-		Samples: interfaceMetricSamples(interfaceLabels, stats, dropsV4+dropsV6),
-	}
-	for _, peer := range rt.shim.PeerStats() {
-		if peer.MetricsID == "" {
-			continue
-		}
-		labels := map[string]string{"interface": rt.ifname, "peer_id": peer.MetricsID}
-		snapshot.Samples = append(snapshot.Samples,
-			metrics.Sample{Name: "wgf_peer_pmtu_carrier_payload_bytes", Labels: labels, Value: uint64(peer.CarrierPayload)},
-			metrics.Sample{Name: "wgf_peer_pmtu_searching", Labels: labels, Value: boolMetricValue(peer.PMTUSearching)},
-			metrics.Sample{Name: "wgf_peer_data_forwarding_enabled", Labels: labels, Value: boolMetricValue(peer.DataForwardingEnabled)},
-		)
-	}
-	return snapshot
-}
-
-func interfaceMetricSamples(labels map[string]string, stats shimtun.Stats, socketDrops uint64) []metrics.Sample {
-	return []metrics.Sample{
-		{Name: "wgf_tx_carriers_total", Labels: labels, Value: stats.TXCarriers},
-		{Name: "wgf_tx_packet_drops_total", Labels: labels, Value: stats.TXPacketDrops},
-		{Name: "wgf_tx_native_fragment_drops_total", Labels: labels, Value: stats.TXNativeFragmentDrops},
-		{Name: "wgf_tx_route_drops_total", Labels: labels, Value: stats.TXRouteDrops},
-		{Name: "wgf_tx_peer_mtu_drops_total", Labels: labels, Value: stats.TXPeerMTUDrops},
-		{Name: "wgf_tx_ptb_sent_total", Labels: labels, Value: stats.TXPTBSent},
-		{Name: "wgf_rx_data_carriers_total", Labels: labels, Value: stats.RXDataCarriers},
-		{Name: "wgf_rx_inner_packets_total", Labels: labels, Value: stats.RXInnerDelivered},
-		{Name: "wgf_rx_packet_rejects_total", Labels: labels, Value: stats.RXPacketRejects},
-		{Name: "wgf_rx_native_fragment_drops_total", Labels: labels, Value: stats.RXNativeFragmentDrops},
-		{Name: "wgf_rx_source_spoof_drops_total", Labels: labels, Value: stats.RXSourceSpoofDrops},
-		{Name: "wgf_rx_native_write_drops_total", Labels: labels, Value: stats.RXNativeWriteDrops},
-		{Name: "wgf_carrier_queue_overflows_total", Labels: labels, Value: stats.CarrierQueueOverflows},
-		{Name: "wgf_control_queue_drops_total", Labels: labels, Value: stats.ControlQueueDrops},
-		{Name: "wgf_control_exploratory_evictions_total", Labels: labels, Value: stats.ControlExploratoryEvictions},
-		{Name: "wgf_control_coalesces_total", Labels: labels, Value: stats.ControlCoalesces},
-		{Name: "wgf_control_rate_suppression_episodes_total", Labels: labels, Value: stats.ControlRateSuppressionEpisodes},
-		{Name: "wgf_control_materialization_drops_total", Labels: labels, Value: stats.ControlMaterializationDrops},
-		{Name: "wgf_control_ingress_rate_limited_total", Labels: labels, Value: stats.ControlIngressRateLimited},
-		{Name: "wgf_preconfirm_drops_total", Labels: labels, Value: stats.PreconfirmDrops},
-		{Name: "wgf_reassembly_expirations_total", Labels: labels, Value: stats.ReassemblyExpirations},
-		{Name: "wgf_udp_socket_drops_total", Labels: labels, Value: socketDrops},
-	}
-}
-
-func boolMetricValue(value bool) uint64 {
-	if value {
-		return 1
-	}
-	return 0
 }
