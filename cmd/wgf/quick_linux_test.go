@@ -150,19 +150,6 @@ func TestTeardownBlackholeRulesProtectOwnedPrefixes(t *testing.T) {
 	}
 }
 
-func TestQuickFileLockSerializesOperations(t *testing.T) {
-	t.Parallel()
-	path := filepath.Join(t.TempDir(), "quick.lock")
-	release, err := acquireQuickFileLock(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer release()
-	if _, err := acquireQuickFileLock(path); !errors.Is(err, errQuickLockBusy) {
-		t.Fatalf("second lock error = %v, want errQuickLockBusy", err)
-	}
-}
-
 func TestQuickReloadResourcesEqualAllowsRuntimeOnlyChanges(t *testing.T) {
 	t.Parallel()
 	old, err := quick.Parse(quickTestConfig("Table = auto\n"))

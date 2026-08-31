@@ -101,34 +101,6 @@ type quickManifest struct {
 	RulesV6       bool     `json:"rules_v6"`
 }
 
-var errQuickLockBusy = errors.New("wgf quick: another quick operation is already in progress")
-
-func acquireQuickFileLock(path string) (func(), error) {
-	lockFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open quick lock: %w", err)
-	}
-	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		_ = lockFile.Close()
-
-		if errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EAGAIN) {
-			return nil, errQuickLockBusy
-		}
-		return nil, fmt.Errorf("acquire quick lock: %w", err)
-	}
-	return func() {
-		_ = unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
-		_ = lockFile.Close()
-	}, nil
-}
-
-func acquireQuickLock() (func(), error) {
-	if err := os.MkdirAll(runtimedir.Default, 0o700); err != nil {
-		return nil, fmt.Errorf("create quick runtime directory: %w", err)
-	}
-	return acquireQuickFileLock(filepath.Join(runtimedir.Default, ".quick.lock"))
-}
-
 func loadQuickDownParsed(input, fallback, route string) (quick.Parsed, quick.RoutePlan, error) {
 	text, err := os.ReadFile(input)
 	if err != nil {
@@ -325,7 +297,7 @@ func quickUp(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	unlock, err := acquireQuickLock()
+	unlock, err := acquireQuickLock(stderr, "up", ifname)
 	if err != nil {
 		return err
 	}
@@ -493,7 +465,7 @@ func quickDown(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	unlock, err := acquireQuickLock()
+	unlock, err := acquireQuickLock(stderr, "down", ifname)
 	if err != nil {
 		return err
 	}
