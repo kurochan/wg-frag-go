@@ -414,7 +414,7 @@ func awaitReloadMutation[T any](ctx context.Context, operation func() (T, error)
 	for {
 		result, err := operation()
 		if err == nil {
-			return result, err
+			return result, nil
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return zero, ctxErr
