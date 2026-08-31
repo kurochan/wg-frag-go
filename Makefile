@@ -86,11 +86,4 @@ bench-netns:
 # Keep worker count bounded: fuzz targets must remain usable on developer
 # laptops as well as in the isolated Linux validation VM.
 fuzz:
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzParse -fuzztime=$(FUZZTIME) ./internal/config
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzParse -fuzztime=$(FUZZTIME) ./internal/core/innerip
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzParseRoundTrip -fuzztime=$(FUZZTIME) ./internal/core/carrier
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzParseEnvelope -fuzztime=$(FUZZTIME) ./internal/core/carrier
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzCodecParseRoundTrip -fuzztime=$(FUZZTIME) ./internal/core/control
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzReceiverAcceptCarrier -fuzztime=$(FUZZTIME) ./internal/core/datapath
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzAcceptAndExpire -fuzztime=$(FUZZTIME) ./internal/core/reassembly
-	GOMAXPROCS=2 go test -run='^$$' -parallel=1 -fuzz=FuzzHandleInbound -fuzztime=$(FUZZTIME) ./internal/controlplane
+	FUZZTIME=$(FUZZTIME) bash scripts/run-fuzz-smoke.sh
