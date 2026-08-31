@@ -100,7 +100,9 @@ func (s *Server) stop() {
 				}
 			}
 		case <-timer.C:
-			s.grpc.Stop()
+			// A callback may ignore context cancellation. Stop the transports
+			// without making Close wait for that callback to return.
+			go s.grpc.Stop()
 		}
 		_ = os.Remove(s.socketPath)
 		if s.releaseLock != nil {
