@@ -8,6 +8,8 @@ PartOf=wgf.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=10min
+TimeoutStopSec=10min
 ExecStart=/usr/bin/wgf quick up %i
 ExecReload=/usr/bin/wgf quick reload %i
 ExecStop=/usr/bin/wgf quick down %i

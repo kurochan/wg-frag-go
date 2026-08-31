@@ -61,7 +61,7 @@ func quickReloadWith(
 		fmt.Fprintln(stderr, warning)
 	}
 
-	unlock, err := acquireQuickLock()
+	unlock, err := acquireQuickLock(stderr, "reload", ifname)
 	if err != nil {
 		return err
 	}
