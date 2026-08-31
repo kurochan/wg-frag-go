@@ -62,6 +62,9 @@ jobs:
           make release-notes-check
           ruby scripts/render_github_release_notes.rb --version "$RELEASE_TAG" >/dev/null
 
+      - name: Test release scripts
+        run: make test-release-scripts
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -317,9 +320,58 @@ jobs:
           overwrite: true
           retention-days: 7
 
+  ppa-validate:
+    name: Validate Launchpad PPA source (${{ matrix.series }})
+    needs: [ppa-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        series:
+          - jammy
+          - noble
+          - resolute
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out revision
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Download unsigned source package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ppa-source-${{ matrix.series }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/ppa-source-${{ matrix.series }}
+
+      - name: Validate unsigned source package
+        run: |
+          ruby scripts/validate_ppa_source.rb \
+            --artifact-root "$RUNNER_TEMP/ppa-source-${{ matrix.series }}" \
+            --series "${{ matrix.series }}" \
+            --tag "$GITHUB_REF_NAME" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Upload validated source package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ppa-validated-source-${{ matrix.series }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/ppa-source-${{ matrix.series }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
   ppa-publish:
     name: Publish Launchpad PPA (${{ matrix.series }})
-    needs: [release, ppa-build]
+    needs: [release, ppa-validate]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
@@ -336,10 +388,10 @@ jobs:
     permissions:
       actions: read
     steps:
-      - name: Download unsigned source package
+      - name: Download validated source package
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: ppa-source-${{ matrix.series }}-${{ github.run_id }}
+          name: ppa-validated-source-${{ matrix.series }}-${{ github.run_id }}
           path: ${{ runner.temp }}/ppa-source-${{ matrix.series }}
 
       - name: Install signing and upload tools
@@ -349,15 +401,9 @@ jobs:
             devscripts dput gnupg
 
       # This job deliberately does not check out or execute repository code.
-      - name: Validate unsigned source package
+      - name: Verify validated source package manifest
         run: |
           set -euo pipefail
-
-          case "$TARGET_SERIES" in
-            jammy|noble|resolute) ;;
-            *) echo "unsupported Ubuntu series: $TARGET_SERIES" >&2; exit 1 ;;
-          esac
-
           artifact_root="$RUNNER_TEMP/ppa-source-$TARGET_SERIES"
           if find "$artifact_root" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
             echo "source package artifact contains a non-regular file" >&2
@@ -370,162 +416,7 @@ jobs:
             exit 1
           fi
           changes_file="${changes_files[0]}"
-
-          declare -A manifest_files=()
-          while IFS= read -r line; do
-            if [[ ! "$line" =~ ^([0-9a-f]{64})\ \ ([A-Za-z0-9][A-Za-z0-9.+~_-]*)$ ]]; then
-              echo "invalid SHA256SUMS entry" >&2
-              exit 1
-            fi
-            filename="${BASH_REMATCH[2]}"
-            if [ "$filename" = SHA256SUMS ] || [ -n "${manifest_files[$filename]:-}" ]; then
-              echo "duplicate or recursive SHA256SUMS entry: $filename" >&2
-              exit 1
-            fi
-            manifest_files["$filename"]=1
-          done < "$artifact_root/SHA256SUMS"
-
-          if [ "${#manifest_files[@]}" -lt 2 ]; then
-            echo "source package manifest is incomplete" >&2
-            exit 1
-          fi
-          while IFS= read -r -d '' path; do
-            filename="${path##*/}"
-            if [ "$filename" != SHA256SUMS ] && [ -z "${manifest_files[$filename]:-}" ]; then
-              echo "unmanifested source package file: $filename" >&2
-              exit 1
-            fi
-          done < <(find "$artifact_root" -maxdepth 1 -type f -print0)
-          for filename in "${!manifest_files[@]}"; do
-            if [ ! -f "$artifact_root/$filename" ] || [ -L "$artifact_root/$filename" ]; then
-              echo "missing or invalid manifested file: $filename" >&2
-              exit 1
-            fi
-          done
           (cd "$artifact_root" && sha256sum --check --strict SHA256SUMS)
-
-          read_field() {
-            local field="$1"
-            local value
-            value="$(sed -n "s/^${field}: //p" "$changes_file")"
-            if [ -z "$value" ] || [ "$(printf '%s\n' "$value" | wc -l)" -ne 1 ]; then
-              echo "missing or repeated $field field in source changes file" >&2
-              exit 1
-            fi
-            printf '%s' "$value"
-          }
-
-          source_name="$(read_field Source)"
-          package_version="$(read_field Version)"
-          distribution="$(read_field Distribution)"
-          architecture="$(read_field Architecture)"
-          if [ "$source_name" != wg-frag-go ] || [ "$distribution" != "$TARGET_SERIES" ] || [ "$architecture" != source ]; then
-            echo "source changes metadata does not match the requested package and series" >&2
-            exit 1
-          fi
-
-          tag_version="${GITHUB_REF_NAME#v}"
-          expected_upstream="$(printf '%s' "$tag_version" | sed -E 's/-([[:alnum:]]+)\./~\1./g')"
-          attempt="${GITHUB_RUN_ATTEMPT:-1}"
-          case "$attempt" in
-            ''|0|*[!0-9]*) echo "invalid GITHUB_RUN_ATTEMPT: $attempt" >&2; exit 1 ;;
-          esac
-          series_attempt="${package_version##*+$TARGET_SERIES}"
-          case "$series_attempt" in
-            ''|0|*[!0-9]*) echo "invalid series build attempt: $series_attempt" >&2; exit 1 ;;
-          esac
-          if [ "$series_attempt" -gt "$attempt" ]; then
-            echo "series build attempt is newer than the workflow attempt" >&2
-            exit 1
-          fi
-          suffix="+$TARGET_SERIES$series_attempt"
-          case "$package_version" in
-            "$expected_upstream"-*"$suffix") ;;
-            *) echo "unexpected source package version: $package_version" >&2; exit 1 ;;
-          esac
-          debian_revision="${package_version#"$expected_upstream"-}"
-          debian_revision="${debian_revision%"$suffix"}"
-          case "$debian_revision" in
-            ''|*[!0-9]*) echo "invalid Debian revision: $debian_revision" >&2; exit 1 ;;
-          esac
-          expected_changes_file="$artifact_root/wg-frag-go_${package_version}_source.changes"
-          if [ "$changes_file" != "$expected_changes_file" ]; then
-            echo "source changes filename does not match its package version" >&2
-            exit 1
-          fi
-
-          declare -A referenced_files=()
-          dsc_count=0
-          while read -r digest size filename extra; do
-            case "$filename" in
-              ''|*/*|.|..) echo "invalid referenced filename: $filename" >&2; exit 1 ;;
-            esac
-            if [ -n "$extra" ] || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]] || [[ ! "$size" =~ ^[0-9]+$ ]]; then
-              echo "invalid checksum metadata for $filename" >&2
-              exit 1
-            fi
-            if [ -n "${referenced_files[$filename]:-}" ]; then
-              echo "duplicate referenced filename: $filename" >&2
-              exit 1
-            fi
-            referenced_files["$filename"]=1
-            [ "${filename%.dsc}" = "$filename" ] || dsc_count=$((dsc_count + 1))
-            actual_digest="$(sha256sum "$artifact_root/$filename" | cut -d ' ' -f 1)"
-            actual_size="$(wc -c < "$artifact_root/$filename" | tr -d '[:space:]')"
-            if [ "$actual_digest" != "$digest" ] || [ "$actual_size" != "$size" ]; then
-              echo "source changes checksum mismatch: $filename" >&2
-              exit 1
-            fi
-          done < <(
-            awk '
-              $0 == "Checksums-Sha256:" { checksums = 1; next }
-              checksums && /^[^ ]/ { exit }
-              checksums { sub(/^ +/, ""); print }
-            ' "$changes_file"
-          )
-          if [ "${#referenced_files[@]}" -lt 1 ] || [ "$dsc_count" -ne 1 ]; then
-            echo "source changes file does not reference exactly one dsc file" >&2
-            exit 1
-          fi
-
-          declare -A upload_files=()
-          while read -r digest size section priority filename extra; do
-            case "$filename" in
-              ''|*/*|.|..) echo "invalid upload filename: $filename" >&2; exit 1 ;;
-            esac
-            if [ -n "$extra" ] || [[ ! "$digest" =~ ^[0-9a-f]{32}$ ]] || [[ ! "$size" =~ ^[0-9]+$ ]] || [ -z "$section" ] || [ -z "$priority" ]; then
-              echo "invalid Files metadata for $filename" >&2
-              exit 1
-            fi
-            if [ -n "${upload_files[$filename]:-}" ]; then
-              echo "duplicate upload filename: $filename" >&2
-              exit 1
-            fi
-            upload_files["$filename"]=1
-          done < <(
-            awk '
-              $0 == "Files:" { files = 1; next }
-              files && /^[^ ]/ { exit }
-              files { sub(/^ +/, ""); print }
-            ' "$changes_file"
-          )
-          if [ "${#upload_files[@]}" -ne "${#referenced_files[@]}" ]; then
-            echo "Files and Checksums-Sha256 contain different file sets" >&2
-            exit 1
-          fi
-          for filename in "${!referenced_files[@]}"; do
-            if [ -z "${upload_files[$filename]:-}" ]; then
-              echo "file missing from upload list: $filename" >&2
-              exit 1
-            fi
-          done
-          for filename in "${!manifest_files[@]}"; do
-            if [ "$artifact_root/$filename" != "$changes_file" ] && [ -z "${referenced_files[$filename]:-}" ]; then
-              echo "unexpected source package file: $filename" >&2
-              exit 1
-            fi
-          done
-
           printf 'PPA_CHANGES_FILE=%s\n' "$changes_file" >> "$GITHUB_ENV"
 
       - name: Sign and upload source package
