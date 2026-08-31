@@ -1,5 +1,15 @@
 # Release Notes
 
+## 0.5.0 - 2026-08-31T03:20:53Z
+
+<!-- debian: urgency=medium -->
+
+- Add public in-process Go and Unix-domain gRPC APIs for dynamically managing WGF interfaces and peers.
+- Add `wgf manager` for owning multiple interfaces in one process while keeping `wgf run` as the single-interface mode.
+- Add peer-only live updates and persistent-TUN runtime restarts, including `wgf quick reload` and systemd reload support.
+- Expose process-wide OpenMetrics consistently for single- and multi-interface operation, with counter continuity across runtime generations and same-identity recreation.
+- Validate generated Launchpad PPA source packages before signing and uploading them.
+
 ## 0.4.1 - 2026-08-30T13:51:12Z
 
 <!-- debian: urgency=medium -->
