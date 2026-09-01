@@ -24,7 +24,7 @@ override_dh_installsystemd:
 
 override_dh_fixperms:
 	dh_fixperms
-	chmod 0700 debian/wg-frag-go/etc/wg-frag
+	chmod 0700 debian/wg-frag-go/etc/wgf
 
 override_dh_auto_clean:
 	rm -rf .cache

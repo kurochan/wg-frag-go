@@ -16,7 +16,11 @@ import (
 )
 
 // ConfigDir is the canonical location for persistent quick configurations.
-const ConfigDir = "/etc/wg-frag"
+const ConfigDir = "/etc/wgf"
+
+// LegacyConfigDir is the configuration directory read for compatibility until
+// v0.7.0.
+const LegacyConfigDir = "/etc/wg-frag"
 
 var ErrInvalidName = errors.New("quick: interface name must be 1..15 characters of [a-zA-Z0-9_=+.-]")
 
@@ -85,6 +89,32 @@ func ValidateName(name string) error {
 // accepted by ValidateName.
 func ConfigPath(name string) string {
 	return filepath.Join(ConfigDir, name+".conf")
+}
+
+// LegacyConfigPath returns the LegacyConfigDir path for a name already
+// validated by ValidateName.
+func LegacyConfigPath(name string) string {
+	return filepath.Join(LegacyConfigDir, name+".conf")
+}
+
+// ResolveConfigPath returns the configuration path for a name already
+// validated by ValidateName, preferring ConfigDir over LegacyConfigDir. A name
+// with no file in either directory resolves to ConfigDir. legacy reports
+// whether the result is in LegacyConfigDir.
+func ResolveConfigPath(name string) (path string, legacy bool) {
+	return resolveConfigPath(ConfigDir, LegacyConfigDir, name)
+}
+
+func resolveConfigPath(dir, legacyDir, name string) (string, bool) {
+	canonical := filepath.Join(dir, name+".conf")
+	if _, err := os.Stat(canonical); err == nil {
+		return canonical, false
+	}
+	fallback := filepath.Join(legacyDir, name+".conf")
+	if _, err := os.Stat(fallback); err == nil {
+		return fallback, true
+	}
+	return canonical, false
 }
 
 // Parse splits text into quick options and runtime configuration, then

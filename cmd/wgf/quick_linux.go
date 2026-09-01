@@ -61,24 +61,69 @@ func quickCommand(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+// quickTarget is the configuration source selected by a quick command
+// argument.
+type quickTarget struct {
+	ifname string
+	path   string
+	// explicit reports that the operator named a file instead of an interface.
+	explicit bool
+	// legacy reports that path is in quick.LegacyConfigDir.
+	legacy bool
+}
+
 // resolveQuickTarget accepts either an interface name or a config path.
 // A path is anything containing a separator or ending in .conf.
-func resolveQuickTarget(argument string) (ifname, path string, err error) {
+func resolveQuickTarget(argument string) (quickTarget, error) {
 	if strings.ContainsRune(argument, os.PathSeparator) || strings.HasSuffix(argument, ".conf") {
 		base := strings.TrimSuffix(filepath.Base(argument), ".conf")
 		if err := quick.ValidateName(base); err != nil {
-			return "", "", err
+			return quickTarget{}, err
 		}
 		absolute, err := filepath.Abs(argument)
 		if err != nil {
-			return "", "", err
+			return quickTarget{}, err
 		}
-		return base, absolute, nil
+		return quickTarget{ifname: base, path: absolute, explicit: true}, nil
 	}
 	if err := quick.ValidateName(argument); err != nil {
-		return "", "", err
+		return quickTarget{}, err
 	}
-	return argument, quick.ConfigPath(argument), nil
+	path, legacy := quick.ResolveConfigPath(argument)
+	return quickTarget{ifname: argument, path: path, legacy: legacy}, nil
+}
+
+// resolveStartedTarget resolves an argument for a command that acts on a
+// started interface, preferring the configuration recorded at start.
+func resolveStartedTarget(argument string) (quickTarget, error) {
+	target, err := resolveQuickTarget(argument)
+	if err != nil || target.explicit {
+		return target, err
+	}
+	origin, err := os.ReadFile(originPath(target.ifname))
+	if err != nil {
+		return target, nil
+	}
+	recorded := strings.TrimSpace(string(origin))
+	if recorded == "" {
+		return target, nil
+	}
+	target.path = recorded
+	target.legacy = recorded == quick.LegacyConfigPath(target.ifname)
+	return target, nil
+}
+
+// legacyConfigWarning reports the removal notice for a configuration read from
+// quick.LegacyConfigDir.
+func legacyConfigWarning(target quickTarget) string {
+	if !target.legacy {
+		return ""
+	}
+	return fmt.Sprintf(
+		"warning: %s is a legacy location; move it to %s (support is removed in v0.7.0)",
+		target.path,
+		quick.ConfigPath(target.ifname),
+	)
 }
 
 func snapshotPath(ifname string) string { return filepath.Join(runtimedir.Default, ifname+".conf") }
@@ -292,10 +337,11 @@ func quickUp(args []string, stdout, stderr io.Writer) error {
 	if len(args) != 1 {
 		return errors.New("usage: wgf quick up <interface|config-file>")
 	}
-	ifname, path, err := resolveQuickTarget(args[0])
+	target, err := resolveQuickTarget(args[0])
 	if err != nil {
 		return err
 	}
+	ifname, path := target.ifname, target.path
 
 	unlock, err := acquireQuickLock(stderr, "up", ifname)
 	if err != nil {
@@ -307,6 +353,9 @@ func quickUp(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("`%s' already exists as a wgf interface (wgf quick down %s first)", ifname, ifname)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect quick runtime state: %w", err)
+	}
+	if warning := legacyConfigWarning(target); warning != "" {
+		fmt.Fprintln(stderr, warning)
 	}
 	if warning := quick.WarnLoosePermissions(path); warning != "" {
 		fmt.Fprintln(stderr, warning)
@@ -461,10 +510,11 @@ func quickDown(args []string, stdout, stderr io.Writer) error {
 	if len(args) != 1 {
 		return errors.New("usage: wgf quick down <interface|config-file>")
 	}
-	ifname, path, err := resolveQuickTarget(args[0])
+	target, err := resolveStartedTarget(args[0])
 	if err != nil {
 		return err
 	}
+	ifname, path := target.ifname, target.path
 	unlock, err := acquireQuickLock(stderr, "down", ifname)
 	if err != nil {
 		return err
@@ -587,10 +637,11 @@ func quickStrip(args []string, stdout io.Writer) error {
 	if len(args) != 1 {
 		return errors.New("usage: wgf quick strip <interface|config-file>")
 	}
-	_, path, err := resolveQuickTarget(args[0])
+	target, err := resolveQuickTarget(args[0])
 	if err != nil {
 		return err
 	}
+	path := target.path
 	// #nosec G703 -- The input path is explicitly selected by the operator.
 	text, err := os.ReadFile(path)
 	if err != nil {
@@ -605,23 +656,21 @@ func quickStrip(args []string, stdout io.Writer) error {
 }
 
 // saveRunningConfig renders the live peer set over the persistent
-// [Interface] section. Instances started from a non-canonical path must pass
-// an explicit output; the runtime snapshot is never the persistence authority.
+// [Interface] section. Instances started from outside the configuration
+// directories must pass an explicit output; the runtime snapshot is never the
+// persistence authority.
 func saveRunningConfig(ifname, output string, stdout, stderr io.Writer) error {
-	canonical := quick.ConfigPath(ifname)
+	migrateFrom := ""
 	if output == "" {
 		origin, err := os.ReadFile(originPath(ifname))
 		if err != nil {
 			return fmt.Errorf("cannot determine how %s was started: %w", ifname, err)
 		}
-		if strings.TrimSpace(string(origin)) != canonical {
-			return fmt.Errorf(
-				"%s was started from %s; use --output to save explicitly",
-				ifname,
-				strings.TrimSpace(string(origin)),
-			)
+		destination, legacy, err := saveDestination(ifname, strings.TrimSpace(string(origin)))
+		if err != nil {
+			return err
 		}
-		output = canonical
+		output, migrateFrom = destination, legacy
 	}
 
 	status, err := getStatusWithSecrets(context.Background(), controlapi.SocketPath(ifname), ifname)
@@ -639,6 +688,12 @@ func saveRunningConfig(ifname, output string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	canonicalExisted := false
+	if migrateFrom != "" {
+		if _, err := os.Stat(output); err == nil {
+			canonicalExisted = true
+		}
+	}
 	// #nosec G703 -- The output path is explicitly selected by the operator.
 	if err := os.MkdirAll(filepath.Dir(output), 0o700); err != nil {
 		return err
@@ -648,7 +703,42 @@ func saveRunningConfig(ifname, output string, stdout, stderr io.Writer) error {
 	}
 
 	fmt.Fprintf(stdout, "wgf quick: saved %s to %s\n", ifname, output)
+	if migrateFrom != "" {
+		removeLegacyConfig(migrateFrom, output, canonicalExisted, stdout, stderr)
+	}
 	return nil
+}
+
+// saveDestination resolves where an interface started from recorded persists
+// its configuration. migrateFrom names the legacy file this save replaces.
+func saveDestination(ifname, recorded string) (output, migrateFrom string, err error) {
+	canonical := quick.ConfigPath(ifname)
+	switch recorded {
+	case canonical:
+		return canonical, "", nil
+	case quick.LegacyConfigPath(ifname):
+		return canonical, recorded, nil
+	default:
+		return "", "", fmt.Errorf(
+			"%s was started from %s; use --output to save explicitly",
+			ifname,
+			recorded,
+		)
+	}
+}
+
+// removeLegacyConfig drops the legacy configuration this save replaced. A
+// failure here must not fail the teardown that triggered the save.
+func removeLegacyConfig(legacy, canonical string, canonicalExisted bool, stdout, stderr io.Writer) {
+	if canonicalExisted {
+		fmt.Fprintf(stderr, "warning: %s already existed; %s was left in place\n", canonical, legacy)
+		return
+	}
+	if err := os.Remove(legacy); err != nil {
+		fmt.Fprintf(stderr, "warning: could not remove %s: %v\n", legacy, err)
+		return
+	}
+	fmt.Fprintf(stdout, "wgf quick: removed legacy %s\n", legacy)
 }
 
 // daemonLogDir receives the detached daemon's output outside systemd. An

@@ -61,12 +61,12 @@ sudo apt update
 sudo apt install wg-frag-go
 ```
 
-Create `/etc/wg-frag/wgf0.conf` from
+Create `/etc/wgf/wgf0.conf` from
 [`examples/wgf0.conf.example`](examples/wgf0.conf.example), protect it with
 mode `0600`, then validate and start it:
 
 ```sh
-sudo wgf check --config /etc/wg-frag/wgf0.conf
+sudo wgf check --config /etc/wgf/wgf0.conf
 sudo systemctl enable --now wgf@wgf0
 sudo wgf show wgf0
 ```

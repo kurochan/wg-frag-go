@@ -19,7 +19,7 @@ window. The currently published series are Ubuntu 22.04 (jammy), 24.04
 /usr/bin/wgf-quick -> wgf          # executable-name alias
 /usr/lib/systemd/system/wgf@.service
 /usr/lib/systemd/system/wgf.target
-/etc/wg-frag/            # configuration directory (0700)
+/etc/wgf/                # configuration directory (0700)
 /usr/share/doc/wg-frag-go/
 ```
 
@@ -38,7 +38,7 @@ sudo install -m 0755 wgf /usr/bin/wgf
 sudo ln -sf wgf /usr/bin/wgf-quick
 sudo install -m 0644 dist/systemd/wgf@.service dist/systemd/wgf.target \
   /usr/lib/systemd/system/
-sudo install -d -m 0700 /etc/wg-frag
+sudo install -d -m 0700 /etc/wgf
 sudo systemctl daemon-reload
 ```
 
@@ -49,7 +49,7 @@ sudo apt install ./wg-frag-go_<version>_linux_<arch>.deb
 ```
 
 The Debian package installs `wgf`, the `wgf-quick` alias, systemd units, and
-the `/etc/wg-frag` directory. It does not enable or start a tunnel
+the `/etc/wgf` directory. It does not enable or start a tunnel
 automatically.
 
 ### macOS arm64
@@ -130,13 +130,13 @@ make build          # ./bin/wgf
 sudo install -m 0755 bin/wgf /usr/bin/wgf
 sudo ln -sf wgf /usr/bin/wgf-quick
 sudo install -m 0644 dist/systemd/wgf@.service dist/systemd/wgf.target /usr/lib/systemd/system/
-sudo install -d -m 0700 /etc/wg-frag
+sudo install -d -m 0700 /etc/wgf
 sudo systemctl daemon-reload
 ```
 
 ## Configuration
 
-Place configuration in `/etc/wg-frag/<interface>.conf`. `wgf quick up`
+Place configuration in `/etc/wgf/<interface>.conf`. `wgf quick up`
 warns when the file is not mode 0600. The format is compatible with wg-quick:
 `Address` and `MTU` are runtime settings, while `Table`, `FwMark`, `PreUp`,
 `PostUp`, `PreDown`, `PostDown`, and `SaveConfig` are handled by `quick`.
@@ -167,7 +167,7 @@ underlay MTU; WGF fragments the excess data.
 ## Starting and stopping
 
 ```sh
-sudo systemctl enable --now wgf@wgf0     # /etc/wg-frag/wgf0.conf
+sudo systemctl enable --now wgf@wgf0     # /etc/wgf/wgf0.conf
 # reread the file without replacing the TUN device
 sudo systemctl reload wgf@wgf0
 # or manually:

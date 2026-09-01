@@ -480,3 +480,70 @@ func TestRunHooksTimeoutKillsProcessGroup(t *testing.T) {
 		t.Fatalf("timed-out hook child created %s", marker)
 	}
 }
+
+func TestResolveQuickTargetDerivesNameFromPath(t *testing.T) {
+	t.Parallel()
+	target, err := resolveQuickTarget("/opt/wgf/wgf0.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.ifname != "wgf0" || target.path != "/opt/wgf/wgf0.conf" || !target.explicit || target.legacy {
+		t.Fatalf("resolveQuickTarget() = %+v", target)
+	}
+	if _, err := resolveQuickTarget("/opt/wgf/not a name.conf"); err == nil {
+		t.Fatal("invalid interface name in path succeeded")
+	}
+}
+
+func TestSaveDestinationAcceptsLegacyOrigin(t *testing.T) {
+	t.Parallel()
+	canonical := quick.ConfigPath("wgf0")
+
+	output, migrateFrom, err := saveDestination("wgf0", canonical)
+	if err != nil || output != canonical || migrateFrom != "" {
+		t.Fatalf("saveDestination(canonical) = (%q, %q, %v)", output, migrateFrom, err)
+	}
+
+	legacy := quick.LegacyConfigPath("wgf0")
+	output, migrateFrom, err = saveDestination("wgf0", legacy)
+	if err != nil || output != canonical || migrateFrom != legacy {
+		t.Fatalf("saveDestination(legacy) = (%q, %q, %v)", output, migrateFrom, err)
+	}
+
+	if _, _, err := saveDestination("wgf0", "/opt/wgf/wgf0.conf"); err == nil {
+		t.Fatal("non-canonical origin succeeded")
+	}
+}
+
+func TestRemoveLegacyConfigKeepsFileWhenCanonicalExisted(t *testing.T) {
+	t.Parallel()
+	legacy := filepath.Join(t.TempDir(), "wgf0.conf")
+	if err := os.WriteFile(legacy, []byte("legacy\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	removeLegacyConfig(legacy, "/etc/wgf/wgf0.conf", true, &stdout, &stderr)
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("legacy config was removed: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "already existed") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+
+	stderr.Reset()
+	removeLegacyConfig(legacy, "/etc/wgf/wgf0.conf", false, &stdout, &stderr)
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatalf("legacy config still present: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "removed legacy") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+
+	// A missing legacy file warns instead of failing the teardown that saved.
+	stderr.Reset()
+	removeLegacyConfig(legacy, "/etc/wgf/wgf0.conf", false, &stdout, &stderr)
+	if !strings.Contains(stderr.String(), "could not remove") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

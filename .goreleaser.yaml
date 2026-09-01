@@ -73,6 +73,8 @@ nfpms:
       - deb
     section: net
     priority: optional
+    scripts:
+      postinstall: debian/wg-frag-go.postinst
     contents:
       - src: dist/systemd/wgf@.service
         dst: /usr/lib/systemd/system/wgf@.service
@@ -94,7 +96,7 @@ nfpms:
         dst: /usr/share/doc/wg-frag-go/docs/threat-model.md
       - src: examples/wgf0.conf.example
         dst: /usr/share/doc/wg-frag-go/examples/wgf0.conf.example
-      - dst: /etc/wg-frag
+      - dst: /etc/wgf
         type: dir
         file_info:
           mode: 0700

@@ -121,6 +121,47 @@ func TestValidateName(t *testing.T) {
 	}
 }
 
+func TestConfigPathUsesCanonicalDirectory(t *testing.T) {
+	t.Parallel()
+	if got, want := ConfigPath("wgf0"), "/etc/wgf/wgf0.conf"; got != want {
+		t.Fatalf("ConfigPath() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveConfigPathPrefersCanonicalDirectory(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dir := filepath.Join(root, "wgf")
+	legacyDir := filepath.Join(root, "wg-frag")
+	for _, made := range []string{dir, legacyDir} {
+		if err := os.MkdirAll(made, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(directory string) string {
+		path := filepath.Join(directory, "wgf0.conf")
+		if err := os.WriteFile(path, []byte("[Interface]\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	// No file in either directory resolves to the canonical path.
+	if got, legacy := resolveConfigPath(dir, legacyDir, "wgf0"); got != filepath.Join(dir, "wgf0.conf") || legacy {
+		t.Fatalf("resolveConfigPath() = (%q, %v), want canonical", got, legacy)
+	}
+
+	legacyPath := write(legacyDir)
+	if got, legacy := resolveConfigPath(dir, legacyDir, "wgf0"); got != legacyPath || !legacy {
+		t.Fatalf("resolveConfigPath() = (%q, %v), want (%q, true)", got, legacy, legacyPath)
+	}
+
+	canonicalPath := write(dir)
+	if got, legacy := resolveConfigPath(dir, legacyDir, "wgf0"); got != canonicalPath || legacy {
+		t.Fatalf("resolveConfigPath() = (%q, %v), want (%q, false)", got, legacy, canonicalPath)
+	}
+}
+
 func TestWriteAtomicModeAndContent(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "wgf0.conf")
