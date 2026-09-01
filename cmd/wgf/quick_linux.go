@@ -93,6 +93,20 @@ func resolveQuickTarget(argument string) (quickTarget, error) {
 	return quickTarget{ifname: argument, path: path, legacy: legacy}, nil
 }
 
+// recordedOrigin returns the configuration path stored when the interface was
+// started, and reports whether one was recorded.
+func recordedOrigin(ifname string) (string, bool) {
+	origin, err := os.ReadFile(originPath(ifname))
+	if err != nil {
+		return "", false
+	}
+	recorded := strings.TrimSpace(string(origin))
+	if recorded == "" {
+		return "", false
+	}
+	return recorded, true
+}
+
 // resolveStartedTarget resolves an argument for a command that acts on a
 // started interface, preferring the configuration recorded at start.
 func resolveStartedTarget(argument string) (quickTarget, error) {
@@ -100,12 +114,8 @@ func resolveStartedTarget(argument string) (quickTarget, error) {
 	if err != nil || target.explicit {
 		return target, err
 	}
-	origin, err := os.ReadFile(originPath(target.ifname))
-	if err != nil {
-		return target, nil
-	}
-	recorded := strings.TrimSpace(string(origin))
-	if recorded == "" {
+	recorded, ok := recordedOrigin(target.ifname)
+	if !ok {
 		return target, nil
 	}
 	target.path = recorded
