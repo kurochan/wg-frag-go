@@ -1,5 +1,14 @@
 # Release Notes
 
+## 0.6.0 - 2026-09-01T10:27:37Z
+
+<!-- debian: urgency=medium -->
+
+- Make concurrent `wgf quick` operations wait with bounded, owner-aware retries instead of failing immediately, including parallel systemd interface startup.
+- Extend the systemd lifecycle timeouts to accommodate serialized `wgf quick` startup, reload, and teardown operations.
+- Move the canonical configuration directory to `/etc/wgf`, with legacy `/etc/wg-frag` fallback and migration through `SaveConfig` until v0.7.0.
+- Apply the Debian post-install systemd reload handling to GoReleaser-built `.deb` packages.
+
 ## 0.5.0 - 2026-08-31T03:20:53Z
 
 <!-- debian: urgency=medium -->
