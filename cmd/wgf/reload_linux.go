@@ -53,9 +53,13 @@ func quickReloadWith(
 	if len(args) != 1 {
 		return errors.New("usage: wgf quick reload <interface|config-file>")
 	}
-	ifname, path, err := resolveQuickTarget(args[0])
+	target, err := resolveStartedTarget(args[0])
 	if err != nil {
 		return err
+	}
+	ifname, path := target.ifname, target.path
+	if warning := legacyConfigWarning(target); warning != "" {
+		fmt.Fprintln(stderr, warning)
 	}
 	if warning := quick.WarnLoosePermissions(path); warning != "" {
 		fmt.Fprintln(stderr, warning)

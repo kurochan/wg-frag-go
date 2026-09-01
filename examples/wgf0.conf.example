@@ -1,6 +1,6 @@
-# Copy to /etc/wg-frag/wgf0.conf, replace every placeholder, then run:
-#   sudo chmod 0600 /etc/wg-frag/wgf0.conf
-#   sudo wgf check --config /etc/wg-frag/wgf0.conf
+# Copy to /etc/wgf/wgf0.conf, replace every placeholder, then run:
+#   sudo chmod 0600 /etc/wgf/wgf0.conf
+#   sudo wgf check --config /etc/wgf/wgf0.conf
 #   sudo wgf quick up wgf0
 
 [Interface]

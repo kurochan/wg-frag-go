@@ -57,10 +57,10 @@ sudo apt install wg-frag-go
 ```
 
 [`examples/wgf0.conf.example`](examples/wgf0.conf.example) を基に
-`/etc/wg-frag/wgf0.conf` を作成し、mode `0600` にしてから検証・起動します。
+`/etc/wgf/wgf0.conf` を作成し、mode `0600` にしてから検証・起動します。
 
 ```sh
-sudo wgf check --config /etc/wg-frag/wgf0.conf
+sudo wgf check --config /etc/wgf/wgf0.conf
 sudo systemctl enable --now wgf@wgf0
 sudo wgf show wgf0
 ```
