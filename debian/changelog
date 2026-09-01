@@ -1,3 +1,17 @@
+wg-frag-go (0.6.0-1) noble; urgency=medium
+
+  * Make concurrent `wgf quick` operations wait with bounded, owner-aware
+    retries instead of failing immediately, including parallel systemd
+    interface startup.
+  * Extend the systemd lifecycle timeouts to accommodate serialized `wgf quick`
+    startup, reload, and teardown operations.
+  * Move the canonical configuration directory to `/etc/wgf`, with legacy
+    `/etc/wg-frag` fallback and migration through `SaveConfig` until v0.7.0.
+  * Apply the Debian post-install systemd reload handling to GoReleaser-built
+    `.deb` packages.
+
+ -- kurochan <kuro@kurochan.org>  Tue, 01 Sep 2026 10:27:37 +0000
+
 wg-frag-go (0.5.0-1) noble; urgency=medium
 
   * Add public in-process Go and Unix-domain gRPC APIs for dynamically managing
