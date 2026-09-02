@@ -88,6 +88,8 @@ nfpms:
         dst: /usr/share/doc/wg-frag-go/README.ja.md
       - src: docs/configuration.md
         dst: /usr/share/doc/wg-frag-go/docs/configuration.md
+      - src: docs/monitoring.md
+        dst: /usr/share/doc/wg-frag-go/docs/monitoring.md
       - src: docs/install.md
         dst: /usr/share/doc/wg-frag-go/docs/install.md
       - src: docs/protocol.md

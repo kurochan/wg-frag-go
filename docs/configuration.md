@@ -48,6 +48,9 @@ All WGF-specific settings belong in `[Interface]`.
 | `WGFMetricsInclude` | unset | Comma-separated metric-name patterns | Limits exposed metrics. A pattern has at most one `*`; empty means every metric. |
 | `WGFMetricsExclude` | unset | Comma-separated metric-name patterns | Removes metrics after inclusion. Exclude takes precedence. |
 
+See [Monitoring](monitoring.md) for endpoint behavior, metric selection,
+labels, and the metric inventory.
+
 The reassembly allocation for one peer is approximately
 `WGFPeerReassemblySlots * MTU`, plus metadata and completed-packet/reorder
 storage. `auto` uses `WGFReassemblySlots` for every peer, so reduce the global
@@ -71,42 +74,6 @@ one 16-byte WireGuard padding bucket below the IPv6 protocol maximum.
 
 Do not add WGF's hidden carrier addresses to `AllowedIPs`; WGF derives and
 installs them internally.
-
-## Metrics
-
-When `WGFMetrics = on`, WGF serves `GET /metrics` and `HEAD /metrics` in
-OpenMetrics text format. The endpoint creates a snapshot only when requested;
-the completed response is reused for up to one second to bound repeated scrape
-work without a background collector or metric library in the packet path. By default,
-the TCP port matches `ListenPort`, so a configuration using `ListenPort =
-51820` exposes `http://127.0.0.1:51820/metrics` and
-`http://[::1]:51820/metrics`.
-
-Metric selection uses canonical metric names such as `wgf_tx_carriers_total`
-and `wgf_peer_pmtu_*`. Each pattern may contain one `*`; `?`, character
-classes, and regular expressions are not supported. Unknown or unmatched
-patterns reject the configuration.
-
-For example:
-
-```ini
-WGFMetrics = on
-WGFMetricsInclude = wgf_tx_*,wgf_rx_*,wgf_peer_pmtu_*
-WGFMetricsExclude = wgf_*_drops_total
-```
-
-The endpoint has no authentication or TLS. Keep the default loopback binding
-unless a protected local collector requires another address. Datadog Agent can
-scrape it with its OpenMetrics integration:
-
-```yaml
-instances:
-  - openmetrics_endpoint: http://127.0.0.1:51820/metrics
-    namespace: wgf
-```
-
-Datadog treats these as custom metrics; select only the metrics needed
-by the deployment.
 
 ## Runtime peer updates
 
