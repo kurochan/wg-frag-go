@@ -81,6 +81,8 @@ diagnostics, and upgrade behavior are in [Installation and operations](docs/inst
   starting, diagnostics, AppArmor, and upgrades.
 - [Configuration reference](docs/configuration.md): all interface, peer, and
   WGF-specific settings.
+- [Monitoring](docs/monitoring.md): OpenMetrics endpoint, metric selection,
+  labels, and collector guidance.
 - [Control API](docs/control-api.md): the in-process Go API, public gRPC API,
   multi-interface manager, lifecycle, and mutation rules.
 - [Wire protocol](docs/protocol.md): carrier formats, capabilities, PMTU, and

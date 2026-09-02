@@ -246,7 +246,8 @@ metric schema is the same in both modes.
 from BLAKE2s(`"wgf:" || raw_public_key`). Counter series continue across
 runtime generations within the same process. The endpoint creates a snapshot
 when scraped and does not run a background metrics collector in the packet
-path. Selection can be restricted with the include/exclude settings described
+path. See [Monitoring](monitoring.md) for endpoint behavior, metric selection,
+labels, and the metric inventory. The include/exclude settings are described
 in the [configuration reference](configuration.md).
 
 ## Configuration and CLI relationship

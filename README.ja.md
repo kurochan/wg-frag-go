@@ -73,6 +73,7 @@ package は tunnel unit を自動で enable / start しません。GitHub Releas
 - [Installation and operations](docs/install.md): release package、PPA、起動、診断、
   AppArmor、upgrade。
 - [Configuration reference](docs/configuration.md): interface、peer、WGF 固有設定の全項目。
+- [Monitoring](docs/monitoring.md): OpenMetrics endpoint、metric 選択、label、collector の利用方法。
 - [Control API](docs/control-api.md): in-process Go API、public gRPC API、複数interface
   manager、lifecycle、mutationの規則。
 - [Wire protocol](docs/protocol.md): carrier format、capability、PMTU、reassembly の仕様。
