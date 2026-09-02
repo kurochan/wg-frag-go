@@ -1,3 +1,13 @@
+wg-frag-go (0.6.1-1) noble; urgency=medium
+
+  * Add a dedicated, vendor-neutral monitoring guide covering the OpenMetrics
+    endpoint, scrape behavior, metric selection, labels, and the metric
+    inventory.
+  * Include the monitoring guide in Debian and GoReleaser packages and link it
+    from the README, configuration reference, and Control API documentation.
+
+ -- kurochan <kuro@kurochan.org>  Wed, 02 Sep 2026 08:50:58 +0000
+
 wg-frag-go (0.6.0-1) noble; urgency=medium
 
   * Make concurrent `wgf quick` operations wait with bounded, owner-aware

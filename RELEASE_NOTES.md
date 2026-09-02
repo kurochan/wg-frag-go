@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.6.1 - 2026-09-02T08:50:58Z
+
+<!-- debian: urgency=medium -->
+
+- Add a dedicated, vendor-neutral monitoring guide covering the OpenMetrics endpoint, scrape behavior, metric selection, labels, and the metric inventory.
+- Include the monitoring guide in Debian and GoReleaser packages and link it from the README, configuration reference, and Control API documentation.
+
 ## 0.6.0 - 2026-09-01T10:27:37Z
 
 <!-- debian: urgency=medium -->
