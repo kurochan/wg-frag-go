@@ -10,7 +10,7 @@ require (
 	golang.org/x/sys v0.47.0
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
 	google.golang.org/grpc v1.83.2
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
