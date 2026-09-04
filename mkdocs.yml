@@ -1,0 +1,64 @@
+site_name: wg-frag-go
+site_description: Userspace fragmentation and packing shim for WireGuard
+site_url: https://kurochan.github.io/wg-frag-go/
+repo_url: https://github.com/kurochan/wg-frag-go
+repo_name: kurochan/wg-frag-go
+edit_uri: edit/main/docs/
+docs_dir: docs
+strict: true
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Install and operations: install.md
+  - Configuration: configuration.md
+  - Monitoring: monitoring.md
+  - Control API: control-api.md
+  - Wire protocol: protocol.md
+  - Threat model: threat-model.md
+  - Benchmarks:
+      - Linux: benchmark.md
+      - Local (Lima): benchmark-local.md
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - include-markdown
+
+hooks:
+  - scripts/mkdocs_repo_links.py

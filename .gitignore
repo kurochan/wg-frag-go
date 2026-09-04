@@ -13,3 +13,7 @@
 debian/files
 debian/wg-frag-go/
 
+
+# Documentation site build output.
+/site/
+__pycache__/
