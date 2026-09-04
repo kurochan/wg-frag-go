@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.6.2 - 2026-09-04T07:29:20Z
+
+<!-- debian: urgency=medium -->
+
+- Publish a browsable documentation website on GitHub Pages with navigation for installation, configuration, monitoring, the Control API, the wire protocol, the security model, and benchmarks.
+- Add strict documentation build validation and repository-link rewriting so checkout-relative links remain useful in the published site.
+
 ## 0.6.1 - 2026-09-02T08:50:58Z
 
 <!-- debian: urgency=medium -->

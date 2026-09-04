@@ -1,3 +1,13 @@
+wg-frag-go (0.6.2-1) noble; urgency=medium
+
+  * Publish a browsable documentation website on GitHub Pages with navigation
+    for installation, configuration, monitoring, the Control API, the wire
+    protocol, the security model, and benchmarks.
+  * Add strict documentation build validation and repository-link rewriting so
+    checkout-relative links remain useful in the published site.
+
+ -- kurochan <kuro@kurochan.org>  Fri, 04 Sep 2026 07:29:20 +0000
+
 wg-frag-go (0.6.1-1) noble; urgency=medium
 
   * Add a dedicated, vendor-neutral monitoring guide covering the OpenMetrics
