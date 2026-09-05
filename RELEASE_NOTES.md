@@ -1,5 +1,14 @@
 # Release Notes
 
+## 0.7.0 - 2026-09-05T16:05:43Z
+
+<!-- debian: urgency=medium -->
+
+- Improve high-rate forwarding efficiency by tracking free reassembly slots, avoiding empty reorder scans, separating reorder deadline handling from reassembly expiry scans, and reserving send-buffer headroom to remove a redundant payload copy.
+- Add the Linux `WGFUDPBatchSize` setting with a default of `256` and an explicit `128` option for tuning UDP receive batching; changes take effect when an interface starts or restarts.
+- Improve capability negotiation recovery on delayed or lossy paths with bounded fast retries for the first 130 seconds and prompt retry re-arming after the first accepted remote Hello, while preserving control message correlation.
+- Add Linux network-emulation integration coverage and focused datapath benchmarks for large inner MTUs, jitter, loss, PMTU discovery, and interface lifecycle behavior.
+
 ## 0.6.2 - 2026-09-04T07:29:20Z
 
 <!-- debian: urgency=medium -->
