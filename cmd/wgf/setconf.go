@@ -85,7 +85,6 @@ func restartSettingsEqual(ifname string, status *controlapiv1.InterfaceStatus, c
 	running.SetPeers(nil)
 	desired.SetPeers(nil)
 	running.ClearPrivateKey()
-	desired.ClearPrivateKey()
 	return proto.Equal(running, desired)
 }
 

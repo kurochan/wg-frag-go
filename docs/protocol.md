@@ -215,9 +215,15 @@ remains fail-closed until all of the following are true:
 8. The local BASE-size `MtuProbe` succeeded.
 
 Packets for an unconfirmed peer enter a fixed eight-slot per-peer pre-confirmation
-queue; overflow drops the oldest packet. Control retries start at 200 ms and
-use exponential backoff with full jitter, capped at 60 seconds. A valid CONTROL
-message clears the backoff.
+queue; overflow drops the oldest packet. Ordinary control retries start at
+200 ms and use exponential backoff with full jitter, capped at 60 seconds.
+An unanswered capability Hello uses a 2-second cap during the first 130 seconds
+of that request, so transport setup does not leave capability negotiation
+waiting on a long retry. It then returns to the ordinary cap to limit traffic
+to an offline peer. The first accepted remote Hello also resets an outstanding
+local Hello's retry backoff without postponing an earlier deadline. Retries
+preserve the original message ID and epoch; matching acknowledgments complete
+the request. BASE recovery and DPLPMTUD retain their own timeout rules.
 
 An accepted `ResetSequenceAck` may include the most recent carrier payload that
 the responder received successfully. This value is an advisory hint for the

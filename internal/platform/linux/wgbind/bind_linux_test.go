@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sys/unix"
@@ -215,6 +216,114 @@ func TestBatchSizeUsesLinuxIdealBatch(t *testing.T) {
 	if got := New().BatchSize(); got != conn.IdealBatchSize {
 		t.Fatalf("BatchSize() = %d, want %d", got, conn.IdealBatchSize)
 	}
+}
+
+func TestBatchSizeCanBeConfiguredAboveNativeTUNBatch(t *testing.T) {
+	t.Parallel()
+	bind := New()
+	if err := bind.SetBatchSize(256); err != nil {
+		t.Fatalf("SetBatchSize() error = %v", err)
+	}
+	if got := bind.BatchSize(); got != 256 {
+		t.Fatalf("BatchSize() = %d, want 256", got)
+	}
+	msgs := bind.msgsPool.Get().(*[]ipv4.Message)
+	defer bind.putMessages(msgs)
+	if got := len(*msgs); got != 256 {
+		t.Fatalf("message pool capacity = %d, want 256", got)
+	}
+}
+
+func TestBatchSizeCannotChangeAfterOpen(t *testing.T) {
+	t.Parallel()
+	bind := New()
+	if _, _, err := bind.Open(0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = bind.Close() })
+	if err := bind.SetBatchSize(256); !errors.Is(err, errBatchSizeFrozen) {
+		t.Fatalf("SetBatchSize() error = %v, want %v", err, errBatchSizeFrozen)
+	}
+	if got := bind.BatchSize(); got != conn.IdealBatchSize {
+		t.Fatalf("BatchSize() = %d after rejected update, want %d", got, conn.IdealBatchSize)
+	}
+}
+
+func TestReceiveSplitsFullConfiguredGROBatch(t *testing.T) {
+	t.Parallel()
+	bind := New()
+	if err := bind.SetBatchSize(256); err != nil {
+		t.Fatal(err)
+	}
+	receiver := bind.receive(nil, fullGROBatchReader{}, true)
+	packets := make([][]byte, 256)
+	for i := range packets {
+		packets[i] = make([]byte, 256)
+	}
+	sizes := make([]int, len(packets))
+	endpoints := make([]conn.Endpoint, len(packets))
+	n, err := receiver(packets, sizes, endpoints)
+	if err != nil {
+		t.Fatalf("receive() error = %v", err)
+	}
+	if n != len(packets) {
+		t.Fatalf("receive() returned %d packets, want %d", n, len(packets))
+	}
+	for i := range packets {
+		if sizes[i] != 4 || packets[i][0] != byte(i/64) || packets[i][1] != byte(i%64) {
+			t.Fatalf("packet %d = (%d, %x), want size 4 and marker (%d, %d)", i, sizes[i], packets[i], i/64, i%64)
+		}
+	}
+}
+
+func TestBatchSizeRemainsFrozenAfterUse(t *testing.T) {
+	for _, use := range []string{"query", "pool", "close"} {
+		t.Run(use, func(t *testing.T) {
+			bind := New()
+			switch use {
+			case "query":
+				_ = bind.BatchSize()
+			case "pool":
+				msgs := bind.msgsPool.Get().(*[]ipv4.Message)
+				bind.putMessages(msgs)
+			case "close":
+				if _, _, err := bind.Open(0); err != nil {
+					t.Fatal(err)
+				}
+				if err := bind.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := bind.SetBatchSize(256); !errors.Is(err, errBatchSizeFrozen) {
+				t.Fatalf("SetBatchSize after %s = %v, want frozen", use, err)
+			}
+		})
+	}
+}
+
+type fullGROBatchReader struct{}
+
+func (fullGROBatchReader) ReadBatch(messages []ipv4.Message, _ int) (int, error) {
+	if len(messages) != 4 {
+		return 0, fmt.Errorf("ReadBatch received %d messages, want 4", len(messages))
+	}
+	for i := range messages {
+		buffer := messages[i].Buffers[0]
+		for j := 0; j < 64; j++ {
+			buffer[j*4] = byte(i)
+			buffer[j*4+1] = byte(j)
+		}
+		messages[i].N = len(buffer)
+		messages[i].OOB = messages[i].OOB[:0]
+		setGSOSize(&messages[i].OOB, 4)
+		// Receive ancillary data uses UDP_GRO, not the UDP_SEGMENT type
+		// used by the send-side helper that constructs this header.
+		header := (*unix.Cmsghdr)(unsafe.Pointer(&messages[i].OOB[0]))
+		header.Type = unix.UDP_GRO
+		messages[i].NN = len(messages[i].OOB)
+		messages[i].Addr = &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 51820}
+	}
+	return len(messages), nil
 }
 
 func TestReceiveAcceptsWireGuardBatch(t *testing.T) {

@@ -68,7 +68,11 @@ type Receiver struct {
 	delivered     []reassembly.Packet
 	reorderHeld   int
 	reorderBudget int
-	drops         ReceiverDrops
+	// reorderDeadline is the earliest known gap deadline. It is refreshed only
+	// when a gap is created or a flush/drain may remove the current earliest
+	// gap, so adapters can compare it in constant time on the packet path.
+	reorderDeadline time.Time
+	drops           ReceiverDrops
 
 	unknownSession uint16
 }
@@ -190,6 +194,7 @@ func (r *Receiver) acceptPayload(now time.Time, payload []byte, sink Sink) error
 			return err
 		}
 		laneReorderer := r.reorders[result.Packet.Key.LaneID]
+		beforeHeld := r.reorderHeld
 		if r.config.ReorderEnabled && r.reorderHeld >= r.reorderBudget &&
 			laneReorderer.WouldQueue(result.Packet.Key.LaneSequence) {
 			oldest := r.oldestReorderLane()
@@ -204,9 +209,10 @@ func (r *Receiver) acceptPayload(now time.Time, payload []byte, sink Sink) error
 					return err
 				}
 				r.reorderHeld -= n - 1
+				r.refreshReorderDeadline(true, now)
 				return r.deliver(n, sink)
 			}
-			if err := r.flushOldestReorder(sink); err != nil {
+			if err := r.flushOldestReorder(now, sink); err != nil {
 				_ = r.reassembly.Release(result.Packet.Handle)
 				return err
 			}
@@ -221,31 +227,87 @@ func (r *Receiver) acceptPayload(now time.Time, payload []byte, sink Sink) error
 			return r.reassembly.Release(result.Packet.Handle)
 		case reorder.StatusQueued:
 			r.reorderHeld++
+			// Keep the earliest gap deadline when a carrier batch reaches an
+			// older lane after a newer lane already queued a packet.
+			r.considerReorderDeadline(laneReorderer.GapStartedAt().Add(r.config.ReorderMaxDelay))
 		case reorder.StatusDelivered, reorder.StatusFlushed:
 			r.reorderHeld -= ordered.Delivered - 1
+		}
+		switch {
+		case r.reorderHeld == 0:
+			r.refreshReorderDeadline(false, now)
+		case beforeHeld == 0:
+			// The first queued packet establishes the deadline; later queued
+			// packets cannot make it earlier without the explicit min update.
+			r.refreshReorderDeadline(false, now)
+		case ordered.Status == reorder.StatusFlushed ||
+			(ordered.Status == reorder.StatusDelivered && ordered.Delivered > 1):
+			r.refreshReorderDeadline(true, now)
 		}
 		return r.deliver(ordered.Delivered, sink)
 	})
 }
 
-// Tick expires incomplete reassembly slots and flushes reorder gaps that have
-// waited for their configured maximum. It returns the count of expired slots.
-func (r *Receiver) Tick(now time.Time, sink Sink) (int, error) {
-	expired := r.reassembly.Expire(now)
+// ExpireReassembly expires incomplete packet slots. Reassembly expiration is
+// intentionally separate from reorder expiration because scanning all slots
+// can be substantially more expensive than checking the active reorder lanes.
+func (r *Receiver) ExpireReassembly(now time.Time) int {
+	return r.reassembly.Expire(now)
+}
+
+// TickReorder flushes reorder gaps that have waited for their configured
+// maximum. It does not scan reassembly slots.
+func (r *Receiver) TickReorder(now time.Time, sink Sink) error {
+	if !r.config.ReorderEnabled || r.reorderHeld == 0 {
+		return nil
+	}
+	flushed := false
 	for _, reorderer := range r.reorders {
 		n, err := reorderer.Tick(now, r.delivered)
 		if err != nil {
-			return expired, err
+			return err
 		}
 		r.reorderHeld -= n
+		flushed = flushed || n != 0
 		if err := r.deliver(n, sink); err != nil {
-			return expired, err
+			if flushed {
+				r.refreshReorderDeadline(true, now)
+			}
+			return err
 		}
+	}
+	if flushed {
+		r.refreshReorderDeadline(true, now)
+	} else if r.reorderHeld == 0 {
+		r.refreshReorderDeadline(false, now)
+	}
+	return nil
+}
+
+// NextReorderDeadline reports the earliest deadline among pending reorder
+// gaps. A zero time means no reorder gap is pending or reordering is disabled.
+// The receiver owner must serialize this call with AcceptPayload and
+// TickReorder, just like the other receiver methods.
+func (r *Receiver) NextReorderDeadline() time.Time {
+	if !r.config.ReorderEnabled || r.reorderHeld == 0 {
+		return time.Time{}
+	}
+	return r.reorderDeadline
+}
+
+// Tick expires incomplete reassembly slots and flushes reorder gaps that have
+// waited for their configured maximum. It returns the count of expired slots.
+// New code that schedules the two operations independently should use
+// ExpireReassembly and TickReorder instead.
+func (r *Receiver) Tick(now time.Time, sink Sink) (int, error) {
+	expired := r.ExpireReassembly(now)
+	if err := r.TickReorder(now, sink); err != nil {
+		return expired, err
 	}
 	return expired, nil
 }
 
-func (r *Receiver) flushOldestReorder(sink Sink) error {
+func (r *Receiver) flushOldestReorder(now time.Time, sink Sink) error {
 	oldest := r.oldestReorderLane()
 	if oldest < 0 {
 		return errors.New("datapath: reorder budget accounting mismatch")
@@ -255,7 +317,45 @@ func (r *Receiver) flushOldestReorder(sink Sink) error {
 		return err
 	}
 	r.reorderHeld -= n
+	r.refreshReorderDeadline(true, now)
 	return r.deliver(n, sink)
+}
+
+// refreshReorderDeadline updates the constant-time deadline hint. The caller
+// owns the receiver and invokes recompute only after an operation that may
+// have removed the current earliest gap.
+func (r *Receiver) refreshReorderDeadline(recompute bool, now time.Time) {
+	if !r.config.ReorderEnabled || r.reorderHeld == 0 {
+		r.reorderDeadline = time.Time{}
+		return
+	}
+	if !recompute && r.reorderDeadline.IsZero() {
+		r.reorderDeadline = now.Add(r.config.ReorderMaxDelay)
+		return
+	}
+	if !recompute {
+		return
+	}
+	var deadline time.Time
+	for _, reorderer := range r.reorders {
+		if reorderer.Pending() == 0 {
+			continue
+		}
+		candidate := reorderer.GapStartedAt().Add(r.config.ReorderMaxDelay)
+		if deadline.IsZero() || candidate.Before(deadline) {
+			deadline = candidate
+		}
+	}
+	r.reorderDeadline = deadline
+}
+
+func (r *Receiver) considerReorderDeadline(candidate time.Time) {
+	if !r.config.ReorderEnabled || r.reorderHeld == 0 {
+		return
+	}
+	if r.reorderDeadline.IsZero() || candidate.Before(r.reorderDeadline) {
+		r.reorderDeadline = candidate
+	}
 }
 
 func (r *Receiver) oldestReorderLane() int {

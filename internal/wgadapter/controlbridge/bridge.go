@@ -2,6 +2,7 @@ package controlbridge
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"log/slog"
 	"reflect"
@@ -10,9 +11,12 @@ import (
 	"time"
 
 	"github.com/kurochan/wg-frag-go/internal/controlplane"
+	corecontrol "github.com/kurochan/wg-frag-go/internal/core/control"
 	controlstate "github.com/kurochan/wg-frag-go/internal/core/control/state"
 	"github.com/kurochan/wg-frag-go/internal/core/datapath"
 	"github.com/kurochan/wg-frag-go/internal/core/peerroute"
+	wirev1 "github.com/kurochan/wg-frag-go/proto/wire/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -183,6 +187,7 @@ func (b *Bridge) Snapshot() Snapshot {
 // Write and therefore cannot deadlock its DATA reassembly lock.
 func (b *Bridge) DeliverControl(peer peerroute.PeerID, frame []byte) error {
 	if peer != b.peerID {
+		b.logControl("control receive", frame, "phase", "rejected", "error", ErrPeerMismatch)
 		return ErrPeerMismatch
 	}
 	b.mu.Lock()
@@ -190,10 +195,34 @@ func (b *Bridge) DeliverControl(peer peerroute.PeerID, frame []byte) error {
 	if b.detached {
 		return nil
 	}
+	before := b.engine.MissingFlags()
+	b.logControl("control receive", frame, "phase", "before", "missing_flags", uint16(before))
 	outbound, err := b.engine.HandleInbound(frame)
 	if err != nil {
+		b.logControl(
+			"control receive",
+			frame,
+			"phase",
+			"after",
+			"missing_flags",
+			uint16(b.engine.MissingFlags()),
+			"outbound_count",
+			0,
+			"error",
+			err,
+		)
 		return err
 	}
+	b.logControl(
+		"control receive",
+		frame,
+		"phase",
+		"after",
+		"missing_flags",
+		uint16(b.engine.MissingFlags()),
+		"outbound_count",
+		len(outbound),
+	)
 	b.markStartedLocked()
 	return b.applyLocked(outbound)
 }
@@ -292,10 +321,21 @@ func (b *Bridge) applyLocked(outbound []controlplane.Outbound) error {
 			return err
 		}
 	}
-	for _, message := range outbound {
+	for index, message := range outbound {
 		if err := b.tun.EnqueueControl(b.peerID, message.Frame); err != nil {
+			b.logControl(
+				"control enqueue",
+				message.Frame,
+				"ordinal",
+				index,
+				"result",
+				"error",
+				"error",
+				err,
+			)
 			return err
 		}
+		b.logControl("control enqueue", message.Frame, "ordinal", index, "result", "ok")
 	}
 	if !dataAllowed {
 		return nil
@@ -365,11 +405,12 @@ func (b *Bridge) applyLocked(outbound []controlplane.Outbound) error {
 }
 
 func (b *Bridge) snapshotLocked() Snapshot {
+	missingFlags := b.engine.MissingFlags()
 	return Snapshot{
 		CarrierPayload: b.engine.ConfirmedCarrierPayload(),
 		PMTUSearching:  b.engine.PMTUSearching(),
-		DataReady:      b.engine.MissingFlags() == 0,
-		MissingFlags:   b.engine.MissingFlags(),
+		DataReady:      missingFlags == 0,
+		MissingFlags:   missingFlags,
 		Status:         b.engine.Status(),
 		StatusReason:   b.engine.StatusReason(),
 	}
@@ -378,6 +419,83 @@ func (b *Bridge) snapshotLocked() Snapshot {
 func (b *Bridge) log(level slog.Level, message string, args ...any) {
 	if b.logger != nil {
 		b.logger.Log(context.Background(), level, message, args...)
+	}
+}
+
+// controlTrace contains only public envelope metadata; payload fields are
+// deliberately excluded from DEBUG logs.
+type controlTrace struct {
+	kind      string
+	epoch     uint64
+	messageID uint64
+	replyTo   uint64
+	valid     bool
+}
+
+// logControl decodes CONTROL metadata only when DEBUG is enabled because
+// DeliverControl runs on wireguard-go's receive path.
+func (b *Bridge) logControl(message string, frame []byte, args ...any) {
+	ctx := context.Background()
+	if b.logger == nil || !b.logger.Enabled(ctx, slog.LevelDebug) {
+		return
+	}
+	trace := decodeControlTrace(frame)
+	fields := []any{
+		"control_kind", trace.kind,
+		"control_epoch", trace.epoch,
+		"control_message_id", trace.messageID,
+		"control_reply_to", trace.replyTo,
+		"control_metadata_valid", trace.valid,
+	}
+	fields = append(fields, args...)
+	b.logger.Log(ctx, slog.LevelDebug, message, fields...)
+}
+
+func decodeControlTrace(frame []byte) controlTrace {
+	trace := controlTrace{kind: "invalid"}
+	if len(frame) < corecontrol.HeaderSize+1 ||
+		binary.BigEndian.Uint16(frame[:2]) != corecontrol.Marker ||
+		frame[2] != corecontrol.ProtocolVersion {
+		return trace
+	}
+	var message wirev1.Control
+	if err := (proto.UnmarshalOptions{DiscardUnknown: true, RecursionLimit: 16}).Unmarshal(frame[corecontrol.HeaderSize:], &message); err != nil {
+		return trace
+	}
+	trace.epoch = message.GetControlEpoch()
+	trace.messageID = message.GetMessageId()
+	trace.replyTo = message.GetReplyTo()
+	trace.kind = controlBodyKind(&message)
+	trace.valid = trace.messageID != 0 && trace.epoch != 0 && trace.kind != "unknown"
+	return trace
+}
+
+func controlBodyKind(message *wirev1.Control) string {
+	switch {
+	case message.GetCapabilitiesHello() != nil:
+		return "capabilities_hello"
+	case message.GetCapabilitiesAck() != nil:
+		return "capabilities_ack"
+	case message.GetResetSequence() != nil:
+		return "reset_sequence"
+	case message.GetResetSequenceAck() != nil:
+		return "reset_sequence_ack"
+	case message.GetPeerMtu() != nil:
+		return "peer_mtu"
+	case message.GetPeerMtuAck() != nil:
+		return "peer_mtu_ack"
+	case message.GetPing() != nil:
+		return "ping"
+	case message.GetPong() != nil:
+		return "pong"
+	case message.GetMtuProbe() != nil:
+		return "mtu_probe"
+	case message.GetMtuProbeAck() != nil:
+		return "mtu_probe_ack"
+	case message.GetStateSyncRequired() != nil:
+		return "state_sync_required"
+	default:
+		return "unknown"
 	}
 }
 

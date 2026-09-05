@@ -6,8 +6,23 @@ import (
 	"testing"
 
 	"github.com/kurochan/wg-frag-go/internal/config"
+	"github.com/kurochan/wg-frag-go/internal/controlconfig"
 	controlapiv1 "github.com/kurochan/wg-frag-go/proto/controlapi/v1"
 )
+
+func TestUDPBatchSizeChangeRequiresRestart(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	status := &controlapiv1.InterfaceStatus{}
+	status.SetSpec(controlconfig.SpecFromConfig("wgf0", &cfg, false))
+	if !restartSettingsEqual("wgf0", status, &cfg) {
+		t.Fatal("unchanged UDP batch size requires restart")
+	}
+	cfg.Interface.UDPBatchSize = config.MinUDPBatchSize
+	if restartSettingsEqual("wgf0", status, &cfg) {
+		t.Fatal("changed UDP batch size did not require restart")
+	}
+}
 
 func TestDesiredFromConfigPreservesExplicitEmptyAndZeroFields(t *testing.T) {
 	t.Parallel()

@@ -47,7 +47,7 @@ func runBaselineWireGuardGo(ifname, path string) error {
 	if err != nil {
 		return fmt.Errorf("create TUN: %w", err)
 	}
-	defer native.Close()
+	defer closeNetNSResource(native)
 	actualName, err := native.Name()
 	if err != nil {
 		return err
@@ -171,9 +171,9 @@ func waitForBaselineReachability(t *testing.T, from, to netns.NsHandle) {
 func baselineProbe(t *testing.T, from, to netns.NsHandle) bool {
 	t.Helper()
 	listener := listenUDPInNS(t, to, "10.2.0.1:49001")
-	defer listener.Close()
+	defer closeNetNSResource(listener)
 	sender := dialUDPInNS(t, from, "10.1.0.1:0", "10.2.0.1:49001")
-	defer sender.Close()
+	defer closeNetNSResource(sender)
 	if _, err := sender.Write([]byte("probe")); err != nil {
 		return false
 	}

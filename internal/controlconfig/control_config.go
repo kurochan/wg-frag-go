@@ -102,6 +102,16 @@ func Create(spec *controlapiv1.InterfaceSpec, current *config.Config) (*config.C
 		}
 		iface.SocketBuffer = value
 	}
+	if spec.HasUdpBatchSize() {
+		value, err := uint32ToInt(spec.GetUdpBatchSize(), "UDP batch size")
+		if err != nil {
+			return nil, err
+		}
+		if err := config.ValidateUDPBatchSize(value); err != nil {
+			return nil, err
+		}
+		iface.UDPBatchSize = value
+	}
 	if spec.HasFwMark() {
 		iface.FwMark = spec.GetFwMark()
 	}
@@ -206,25 +216,14 @@ func SpecFromConfig(ifname string, cfg *config.Config, includeSecrets bool) *con
 	spec.SetMinCarrierPayload(uint32(iface.MinCarrierPayload))
 	spec.SetMaxCarrierPayload(uint32(iface.MaxCarrierPayload))
 	spec.SetReassemblySlots(uint32(iface.ReassemblySlots))
-	if iface.PeerReassemblySlots.Auto {
-		spec.SetPeerReassemblySlots(0)
-	} else {
-		spec.SetPeerReassemblySlots(uint32(iface.PeerReassemblySlots.Count))
-	}
+	spec.SetPeerReassemblySlots(autoCountToUint32(iface.PeerReassemblySlots))
 	spec.SetReassemblyLifetimeMs(uint32(iface.ReassemblyLifetime / time.Millisecond))
 	spec.SetReorder(iface.Reorder)
 	spec.SetReorderMaxDelayMs(uint32(iface.ReorderMaxDelay / time.Millisecond))
-	if iface.Workers.Auto {
-		spec.SetWorkers(0)
-	} else {
-		spec.SetWorkers(uint32(iface.Workers.Count))
-	}
-	if iface.TUNQueues.Auto {
-		spec.SetTunQueues(0)
-	} else {
-		spec.SetTunQueues(uint32(iface.TUNQueues.Count))
-	}
+	spec.SetWorkers(autoCountToUint32(iface.Workers))
+	spec.SetTunQueues(autoCountToUint32(iface.TUNQueues))
 	spec.SetSocketBuffer(uint32(iface.SocketBuffer))
+	spec.SetUdpBatchSize(uint32(iface.UDPBatchSize))
 	spec.SetFwMark(iface.FwMark)
 
 	peerSpecs := make([]*controlapiv1.PeerSpec, 0, len(cfg.Peers))
@@ -256,6 +255,13 @@ func SpecFromConfig(ifname string, cfg *config.Config, includeSecrets bool) *con
 	}
 	spec.SetPeers(peerSpecs)
 	return spec
+}
+
+func autoCountToUint32(value config.AutoCount) uint32 {
+	if value.Auto {
+		return 0
+	}
+	return uint32(value.Count)
 }
 
 func autoCountFromUint32(value uint32) config.AutoCount {

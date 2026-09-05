@@ -141,6 +141,9 @@ func TestWireGuardTUNReadWriteBoundaryUsesOffsetAndContinuesBadBatch(t *testing.
 	if sizes[0] <= carrier.IPv6HeaderSize {
 		t.Fatalf("synthetic envelope size = %d, want header and payload", sizes[0])
 	}
+	if !bytes.Equal(buffer[offset:offset+4], []byte{0x60, 0, 0, 0}) {
+		t.Fatalf("synthetic IPv6 first word = %x, want 60000000", buffer[offset:offset+4])
+	}
 	forward, err := carrier.ParseEnvelope(buffer[offset:offset+sizes[0]], netip.MustParseAddr("fe80::1"), netip.MustParseAddr("fe80::2"))
 	if err != nil {
 		t.Fatalf("ParseEnvelope(forward) = %v", err)
@@ -179,6 +182,86 @@ func TestWireGuardTUNReadWriteBoundaryUsesOffsetAndContinuesBadBatch(t *testing.
 	}
 	if rejects := shim.Stats().RXPacketRejects; rejects < 2 {
 		t.Fatalf("RXPacketRejects = %d, want at least malformed and unknown-source drops", rejects)
+	}
+}
+
+func TestWireGuardTUNReadValidatesEnvelopeHeadroomBeforeDescriptors(t *testing.T) {
+	t.Parallel()
+	native := newWireGuardTestTUN(1500)
+	shim := newWireGuardTestShim(t, native)
+	device, err := NewWireGuardTUN(shim, Plan{
+		LocalCarrier: netip.MustParseAddr("fe80::1"),
+		Peers:        []PeerPlan{{ID: 0, Carrier: netip.MustParseAddr("fe80::2")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = device.Close() })
+
+	bufs := [][]byte{
+		make([]byte, carrier.IPv6HeaderSize+100),
+		make([]byte, carrier.IPv6HeaderSize-1),
+	}
+	if _, err := device.Read(bufs, []int{0, 0}, 0); !errors.Is(err, shimtun.ErrShortBuffer) {
+		t.Fatalf("Read() error = %v, want ErrShortBuffer", err)
+	}
+	for i, descriptor := range device.txDesc {
+		if descriptor.Payload != nil || descriptor.Length != 0 || descriptor.PeerID != 0 {
+			t.Fatalf("txDesc[%d] published after short buffer: %#v", i, descriptor)
+		}
+	}
+}
+
+func TestWireGuardTUNReadBoundsOversizedCallerBatch(t *testing.T) {
+	t.Parallel()
+	const innerLength = 600
+	innerBatch := make([][]byte, wireGuardTestBatchSize)
+	for i := range innerBatch {
+		inner := make([]byte, innerLength)
+		inner[0] = 0x45
+		inner[2] = byte(innerLength >> 8)
+		inner[3] = byte(innerLength & 0xff)
+		copy(inner[12:16], []byte{10, 0, 0, 1})
+		copy(inner[16:20], []byte{10, 0, 0, 2})
+		innerBatch[i] = inner
+	}
+	native := newWireGuardTestTUN(1500, innerBatch)
+	shim := newWireGuardTestShim(t, native)
+	device, err := NewWireGuardTUN(shim, Plan{
+		LocalCarrier: netip.MustParseAddr("fe80::1"),
+		Peers:        []PeerPlan{{ID: 0, Carrier: netip.MustParseAddr("fe80::2")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = device.Close() })
+
+	const offset = 5
+	batchSize := device.BatchSize()
+	bufs := make([][]byte, batchSize+1)
+	sizes := make([]int, len(bufs))
+	for i := range bufs {
+		bufs[i] = make([]byte, offset+2048)
+		for j := range bufs[i] {
+			bufs[i][j] = 0xa5
+		}
+	}
+	const extraSize = 0x1357
+	sizes[len(sizes)-1] = extraSize
+	extraBefore := append([]byte(nil), bufs[len(bufs)-1]...)
+
+	count, err := device.Read(bufs, sizes, offset)
+	if err != nil || count != batchSize {
+		t.Fatalf("Read() = (%d, %v), want (%d, nil)", count, err, batchSize)
+	}
+	if sizes[len(sizes)-1] != extraSize {
+		t.Fatalf("oversized batch tail size = %d, want %d", sizes[len(sizes)-1], extraSize)
+	}
+	if !bytes.Equal(bufs[len(bufs)-1], extraBefore) {
+		t.Fatal("Read() modified the caller buffer beyond the shim batch")
+	}
+	if sizes[0] <= carrier.IPv6HeaderSize {
+		t.Fatalf("synthetic envelope size = %d, want header and payload", sizes[0])
 	}
 }
 

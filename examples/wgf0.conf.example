@@ -18,6 +18,7 @@ MTU = 1500
 # WGFReorder = true
 # WGFReorderMaxDelay = 10ms
 # WGFSocketBuffer = 3145728
+# WGFUDPBatchSize = 256
 # WGFWorkers = auto
 # WGFTUNQueues = auto
 # WGFMetrics = off

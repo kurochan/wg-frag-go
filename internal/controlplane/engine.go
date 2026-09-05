@@ -91,6 +91,11 @@ const (
 const (
 	initialRetryDelay = 200 * time.Millisecond
 	maxRetryDelay     = 60 * time.Second
+
+	// Keep capability retries bounded while WireGuard establishes transport;
+	// resume normal offline-peer backoff after the 130s startup window.
+	capabilitiesRetryStartupWindow = 130 * time.Second
+	capabilitiesRetryMaxDelay      = 2 * time.Second
 )
 
 const (
@@ -754,6 +759,17 @@ func (e *Engine) handleCapabilitiesHello(message *wirev1.Control) ([]Outbound, e
 		}
 		return append(out, reverse...), nil
 	}
+	// Remote CONTROL traffic reaching us can recover a local Hello staged while
+	// WireGuard was unavailable. Re-arm only the first accepted remote epoch;
+	// preserve its identity and never postpone an earlier deadline.
+	if previousRemoteEpoch == 0 && e.outstanding.initialized && e.outstanding.kind == requestCapabilities {
+		now := e.now()
+		deadline := now.Add(e.retryDelayForOutstanding(now, 0))
+		e.outstanding.retryAttempt = 0
+		if e.outstanding.retryDeadline.IsZero() || deadline.Before(e.outstanding.retryDeadline) {
+			e.outstanding.retryDeadline = deadline
+		}
+	}
 	progressed, err := e.progress()
 	return append(out, progressed...), err
 }
@@ -1117,13 +1133,14 @@ func (e *Engine) sendRequest(kind requestKind, message *wirev1.Control, ping, pr
 		}
 		probeSize = actual
 	}
+	now := e.now()
 	e.outstanding = outstandingRequest{
 		kind:        kind,
 		messageID:   messageID,
 		ping:        ping,
 		probeSize:   probeSize,
 		initialized: true,
-		sentAt:      e.now(),
+		sentAt:      now,
 	}
 	// DPLPMTUD owns probe retries; every other request is retried by Tick.
 	if kind != requestPMTUProbe {
@@ -1131,19 +1148,37 @@ func (e *Engine) sendRequest(kind requestKind, message *wirev1.Control, ping, pr
 		// copy for retransmission so a TUN implementation cannot mutate the
 		// engine's retry state through the returned slice.
 		e.outstanding.frame = cloneBytes(frame)
-		e.outstanding.retryDeadline = e.now().Add(e.retryDelay(0))
+		e.outstanding.retryDeadline = now.Add(e.retryDelayForOutstanding(now, 0))
 	}
 	return []Outbound{{Frame: frame}}, nil
 }
 
 // retryDelay returns capped exponential backoff with full jitter.
 func (e *Engine) retryDelay(attempt uint) time.Duration {
+	return e.retryDelayCapped(attempt, maxRetryDelay)
+}
+
+// retryDelayForOutstanding selects the retry ceiling from the request's sentAt
+// anchor, so an offline peer cannot keep the startup exception active forever.
+func (e *Engine) retryDelayForOutstanding(now time.Time, attempt uint) time.Duration {
+	maxDelay := maxRetryDelay
+	if e.outstanding.kind == requestCapabilities &&
+		!e.outstanding.sentAt.IsZero() &&
+		now.Before(e.outstanding.sentAt.Add(capabilitiesRetryStartupWindow)) {
+		maxDelay = capabilitiesRetryMaxDelay
+	}
+	return e.retryDelayCapped(attempt, maxDelay)
+}
+
+// retryDelayCapped applies the exponential ceiling before full jitter so the
+// random distribution stays within the selected cap.
+func (e *Engine) retryDelayCapped(attempt uint, maxDelay time.Duration) time.Duration {
 	delay := initialRetryDelay
-	for i := uint(0); i < attempt && delay < maxRetryDelay; i++ {
+	for i := uint(0); i < attempt && delay < maxDelay; i++ {
 		delay *= 2
 	}
-	if delay > maxRetryDelay {
-		delay = maxRetryDelay
+	if delay > maxDelay {
+		delay = maxDelay
 	}
 	if e.entropy == nil {
 		return delay
@@ -1167,7 +1202,7 @@ func (e *Engine) retryOutstanding(now time.Time) []Outbound {
 	}
 
 	e.outstanding.retryAttempt++
-	e.outstanding.retryDeadline = now.Add(e.retryDelay(e.outstanding.retryAttempt))
+	e.outstanding.retryDeadline = now.Add(e.retryDelayForOutstanding(now, e.outstanding.retryAttempt))
 	// The caller owns returned frames. Do not expose the retained retry copy;
 	// a queue is allowed to reuse or mutate a frame after EnqueueControl.
 	return []Outbound{{Frame: cloneBytes(e.outstanding.frame)}}

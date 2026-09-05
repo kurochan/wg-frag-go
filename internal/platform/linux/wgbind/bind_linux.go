@@ -42,6 +42,8 @@ var (
 	_ conn.Endpoint = (*Endpoint)(nil)
 )
 
+var errBatchSizeFrozen = errors.New("wgbind: batch size cannot change after bind use")
+
 // PathEventKind is the transport-neutral event classification. It is aliased
 // here to retain the Linux Bind API while its definition belongs at the
 // adapter boundary.
@@ -82,6 +84,8 @@ type Bind struct {
 	pathEventHandler func(PathEvent)
 	sendErrorHandler func(err error, udpPayloadSize int)
 	socketBuffer     int
+	batchSize        int
+	batchFrozen      bool
 	fwmark           uint32
 	ipv4Buffer       int
 	ipv6Buffer       int
@@ -124,9 +128,13 @@ func newEndpointFromUDP(addr *net.UDPAddr) *Endpoint {
 
 // New returns a closed Linux Bind.
 func New() *Bind {
-	b := &Bind{configureSocket: configureNoFragment}
+	b := &Bind{configureSocket: configureNoFragment, batchSize: conn.IdealBatchSize}
 	b.msgsPool.New = func() any {
-		msgs := make([]ipv4.Message, conn.IdealBatchSize)
+		// The pool capacity follows the configured UDP batch. The WGF TUN
+		// wrapper bounds a wireguard-go request for a 256-entry device batch
+		// to its native 128-entry read.
+		capacity := b.messagePoolCapacity()
+		msgs := make([]ipv4.Message, capacity)
 		for i := range msgs {
 			// A UDP GSO datagram can consist of up to 64 independent
 			// WireGuard datagrams. Keep their iovecs in fixed storage so GSO
@@ -138,6 +146,34 @@ func New() *Bind {
 		return &msgs
 	}
 	return b
+}
+
+// SetBatchSize sets the number of UDP datagrams requested from each receive
+// call. It must be called before the bind is opened (and before the bind is
+// passed to wireguard-go). The supported configuration values are validated
+// by config.Validate; direct users should use 128 or 256.
+func (b *Bind) SetBatchSize(size int) error {
+	if size != conn.IdealBatchSize && size != conn.IdealBatchSize*2 {
+		return fmt.Errorf("wgbind: batch size %d is unsupported (want %d or %d)", size, conn.IdealBatchSize, conn.IdealBatchSize*2)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.open || b.batchFrozen {
+		return errBatchSizeFrozen
+	}
+	b.batchSize = size
+	return nil
+}
+
+func (b *Bind) messagePoolCapacity() int {
+	b.mu.Lock()
+	size := b.batchSize
+	b.batchFrozen = true
+	b.mu.Unlock()
+	if size < conn.IdealBatchSize {
+		return conn.IdealBatchSize
+	}
+	return size
 }
 
 // SetSocketBuffer requests a buffer for each subsequently opened UDP socket.
@@ -388,6 +424,7 @@ func (b *Bind) Open(requestedPort uint16) ([]conn.ReceiveFunc, uint16, error) {
 			b.ipv6TxOffload, b.ipv6RxOffload = configureUDPOffload(v6)
 			b.ipv6PC = ipv6.NewPacketConn(v6)
 		}
+		b.batchFrozen = true
 		b.open = true
 
 		receivers := make([]conn.ReceiveFunc, 0, 2)
@@ -522,9 +559,7 @@ func (b *Bind) readBatchRecovering(socket *net.UDPConn, reader batchReader, mess
 func (b *Bind) putMessages(msgs *[]ipv4.Message) {
 	for i := range *msgs {
 		msg := &(*msgs)[i]
-		for j := range msg.Buffers {
-			msg.Buffers[j] = nil
-		}
+		clear(msg.Buffers)
 		msg.Buffers = msg.Buffers[:1]
 		msg.OOB = msg.OOB[:0]
 		msg.Addr = nil
@@ -1068,10 +1103,20 @@ func (*Bind) ParseEndpoint(value string) (conn.Endpoint, error) {
 	return newEndpoint(address), nil
 }
 
-// BatchSize matches wireguard-go's ideal Linux UDP batch. Kernel/option
-// probing only changes whether ancillary GSO/GRO data is used; sendmmsg and
-// recvmmsg remain available independently.
-func (*Bind) BatchSize() int            { return conn.IdealBatchSize }
+// BatchSize reports the configured Linux UDP batch. Kernel/option probing only
+// changes whether ancillary GSO/GRO data is used; sendmmsg and recvmmsg remain
+// available independently. The message pool retains at least the native
+// wireguard-go batch for the TUN/send side.
+func (b *Bind) BatchSize() int {
+	b.mu.Lock()
+	size := b.batchSize
+	b.batchFrozen = true
+	b.mu.Unlock()
+	if size <= 0 {
+		return conn.IdealBatchSize
+	}
+	return size
+}
 func (*Endpoint) ClearSrc()             {}
 func (*Endpoint) SrcToString() string   { return "" }
 func (e *Endpoint) DstToString() string { return e.addr.String() }

@@ -58,6 +58,7 @@ func TestInterfaceSpecConfigRoundTrip(t *testing.T) {
 	want.Interface.Workers = config.AutoCount{Count: 4}
 	want.Interface.TUNQueues = config.AutoCount{Count: 2}
 	want.Interface.SocketBuffer = 2 << 20
+	want.Interface.UDPBatchSize = 256
 	want.Interface.FwMark = 1234
 	want.Peers = []config.Peer{peer}
 
@@ -99,22 +100,23 @@ func TestInterfaceSpecConfigDefaultsAndAutoCounts(t *testing.T) {
 	spec.SetPeerReassemblySlots(64)
 	spec.SetWorkers(4)
 	spec.SetTunQueues(2)
+	spec.SetUdpBatchSize(256)
 	got, err = Create(spec, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Interface.PeerReassemblySlots != (config.AutoCount{Count: 64}) ||
-		got.Interface.Workers != (config.AutoCount{Count: 4}) || got.Interface.TUNQueues != (config.AutoCount{Count: 2}) {
+		got.Interface.Workers != (config.AutoCount{Count: 4}) || got.Interface.TUNQueues != (config.AutoCount{Count: 2}) || got.Interface.UDPBatchSize != 256 {
 		t.Fatalf("explicit counts = %#v", got.Interface)
 	}
 
 	encoded := SpecFromConfig("wgf0", got, true)
-	if encoded.GetPeerReassemblySlots() != 64 || encoded.GetWorkers() != 4 || encoded.GetTunQueues() != 2 {
-		t.Fatalf("encoded counts = %d/%d/%d", encoded.GetPeerReassemblySlots(), encoded.GetWorkers(), encoded.GetTunQueues())
+	if encoded.GetPeerReassemblySlots() != 64 || encoded.GetWorkers() != 4 || encoded.GetTunQueues() != 2 || encoded.GetUdpBatchSize() != 256 {
+		t.Fatalf("encoded counts = %d/%d/%d/%d", encoded.GetPeerReassemblySlots(), encoded.GetWorkers(), encoded.GetTunQueues(), encoded.GetUdpBatchSize())
 	}
 	encoded = SpecFromConfig("wgf0", &want, true)
-	if encoded.GetPeerReassemblySlots() != 0 || encoded.GetWorkers() != 0 || encoded.GetTunQueues() != 0 {
-		t.Fatalf("encoded auto counts = %d/%d/%d", encoded.GetPeerReassemblySlots(), encoded.GetWorkers(), encoded.GetTunQueues())
+	if encoded.GetPeerReassemblySlots() != 0 || encoded.GetWorkers() != 0 || encoded.GetTunQueues() != 0 || encoded.GetUdpBatchSize() != config.DefaultUDPBatchSize {
+		t.Fatalf("encoded auto counts = %d/%d/%d/%d", encoded.GetPeerReassemblySlots(), encoded.GetWorkers(), encoded.GetTunQueues(), encoded.GetUdpBatchSize())
 	}
 }
 
@@ -408,6 +410,7 @@ func TestInterfaceSpecConfigRejectsInvalidInput(t *testing.T) {
 		{name: "unsupported mtu discovery", modify: func(spec *controlapiv1.InterfaceSpec) { spec.SetMtuDiscovery("probe") }},
 		{name: "port overflow", modify: func(spec *controlapiv1.InterfaceSpec) { spec.SetListenPort(65536) }},
 		{name: "socket buffer too small", modify: func(spec *controlapiv1.InterfaceSpec) { spec.SetSocketBuffer(uint32(config.MinSocketBuffer - 1)) }},
+		{name: "UDP batch size unsupported", modify: func(spec *controlapiv1.InterfaceSpec) { spec.SetUdpBatchSize(64) }},
 		{name: "preserve without current", modify: func(spec *controlapiv1.InterfaceSpec) {
 			peer := controlapiv1.PeerSpec_builder{}.Build()
 			peer.SetPublicKey(validPublic)

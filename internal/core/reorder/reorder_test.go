@@ -58,6 +58,18 @@ func TestInOrderDrainsHeldPackets(t *testing.T) {
 	}
 }
 
+func TestDrainContiguousEmptyQueue(t *testing.T) {
+	t.Parallel()
+	r := mustNew(t, testConfig())
+	out := make([]reassembly.Packet, 1)
+	if got := r.drainContiguous(out); got != 0 {
+		t.Fatalf("drainContiguous() = %d, want 0", got)
+	}
+	if r.Pending() != 0 {
+		t.Fatalf("Pending() after empty drain = %d, want 0", r.Pending())
+	}
+}
+
 func TestDelayFlushSkipsGapWithoutDroppingHeldPackets(t *testing.T) {
 	t.Parallel()
 	r := mustNew(t, testConfig())

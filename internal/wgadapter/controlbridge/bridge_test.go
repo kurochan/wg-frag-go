@@ -1,8 +1,12 @@
 package controlbridge
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/netip"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -468,6 +472,71 @@ func TestStartClosesDataBeforeQueueingControl(t *testing.T) {
 	}
 	if firstDisable < 0 || firstEnqueue < 0 || firstDisable > firstEnqueue {
 		t.Fatalf("calls = %v, want disable before enqueue", calls)
+	}
+}
+
+func TestDebugControlTraceIncludesEnvelopeMetadata(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})).With(
+		"peer_id", peerroute.PeerID(7),
+		"peer_public_key", "test-public-key",
+	)
+	tun := new(fakeTUN)
+	bridge, err := New(Config{
+		Engine:       testEngine(t, 0xc801, 308),
+		TUN:          tun,
+		PeerID:       7,
+		SenderBase:   senderBase("fe80::a", "fe80::b"),
+		ReceiverBase: receiverBase(t, "fe80::b", "fe80::a"),
+		Logger:       logger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bridge.Start(); err != nil {
+		t.Fatal(err)
+	}
+	remote := testEngine(t, 0xd801, 408)
+	outbound, err := remote.Start()
+	if err != nil || len(outbound) != 1 {
+		t.Fatalf("remote Start() = (%d frames, %v)", len(outbound), err)
+	}
+	if err := bridge.DeliverControl(7, outbound[0].Frame); err != nil {
+		t.Fatalf("DeliverControl() error = %v", err)
+	}
+
+	output := logs.String()
+	for _, want := range []string{
+		"msg=\"control receive\"",
+		"phase=before",
+		"phase=after",
+		"control_kind=capabilities_hello",
+		"control_epoch=" + fmt.Sprint(uint64(0xd801)),
+		"control_message_id=1",
+		"control_reply_to=0",
+		"control_metadata_valid=true",
+		"msg=\"control enqueue\"",
+		"result=ok",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("debug log missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "capabilities_hello=") || strings.Contains(output, "payload=") {
+		t.Fatalf("debug log unexpectedly exposed CONTROL payload fields:\n%s", output)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if count := strings.Count(line, "peer_id=7"); count != 1 {
+			t.Fatalf("peer_id appears %d times in DEBUG record: %s", count, line)
+		}
+	}
+}
+
+func TestControlTraceRejectsNonControlFrame(t *testing.T) {
+	trace := decodeControlTrace([]byte{0, 1, 1, 2})
+	if trace.valid || trace.kind != "invalid" || trace.epoch != 0 || trace.messageID != 0 || trace.replyTo != 0 {
+		t.Fatalf("decodeControlTrace(DATA) = %#v, want invalid zero metadata", trace)
 	}
 }
 

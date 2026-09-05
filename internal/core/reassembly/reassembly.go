@@ -93,6 +93,7 @@ type slot struct {
 	state      slotState
 	detached   bool
 	counted    bool
+	freeNext   int
 	generation uint64
 	born       uint64
 	key        Key
@@ -114,10 +115,11 @@ type Reassembler struct {
 	peerCounts []uint32
 	// keySlots is a fixed open-address index from an active packet key to its
 	// slot index plus one. Zero is empty. Its capacity is at least twice Slots,
-	// so key lookup avoids allocations and a linear scan of active slots; finding
-	// a free slot for a new key remains a separate bounded scan.
+	// so key lookup avoids allocations and a linear scan of active slots. Free
+	// slots are tracked by the fixed list below.
 	keySlots []int
 	keyMask  uint64
+	freeHead int
 	nextBorn uint64
 }
 
@@ -146,7 +148,9 @@ func New(config Config) (*Reassembler, error) {
 		start := i * config.MaxPacketSize
 		end := start + config.MaxPacketSize
 		r.slots[i].buf = r.storage[start:end:end]
+		r.slots[i].freeNext = i + 1
 	}
+	r.slots[len(r.slots)-1].freeNext = -1
 
 	return r, nil
 }
@@ -361,27 +365,46 @@ func (r *Reassembler) allocateSlot(now time.Time, key Key, count uint8) (int, Ke
 		if oldest < 0 {
 			return -1, Key{}, false
 		}
-		evicted := r.slots[oldest].key
-		r.clearSlot(oldest)
-		r.startSlot(oldest, now, key, count)
-		return oldest, evicted, true
+		return r.replaceSlot(oldest, now, key, count)
 	}
 
-	for i := range r.slots {
-		if r.slots[i].state == slotFree {
-			r.startSlot(i, now, key, count)
-			return i, Key{}, false
-		}
+	if index := r.takeFreeSlot(); index >= 0 {
+		r.startSlot(index, now, key, count)
+		return index, Key{}, false
 	}
 
 	oldest := r.oldestAssembling(0, false)
 	if oldest < 0 {
 		return -1, Key{}, false
 	}
-	evicted := r.slots[oldest].key
-	r.clearSlot(oldest)
-	r.startSlot(oldest, now, key, count)
-	return oldest, evicted, true
+	return r.replaceSlot(oldest, now, key, count)
+}
+
+func (r *Reassembler) replaceSlot(index int, now time.Time, key Key, count uint8) (int, Key, bool) {
+	evicted := r.slots[index].key
+	r.clearSlot(index)
+	if got := r.takeFreeSlot(); got != index {
+		panic("reassembly: evicted slot missing from free list")
+	}
+	r.startSlot(index, now, key, count)
+	return index, evicted, true
+}
+
+// takeFreeSlot removes and returns one slot from the fixed free list. A
+// negative result means all slots are active or detached completed packets.
+func (r *Reassembler) takeFreeSlot() int {
+	index := r.freeHead
+	if index < 0 {
+		return -1
+	}
+
+	s := &r.slots[index]
+	if s.state != slotFree {
+		panic("reassembly: non-free slot in free list")
+	}
+	r.freeHead = s.freeNext
+	s.freeNext = -1
+	return index
 }
 
 func (r *Reassembler) startSlot(index int, now time.Time, key Key, count uint8) {
@@ -405,7 +428,10 @@ func (r *Reassembler) startSlot(index int, now time.Time, key Key, count uint8) 
 
 func (r *Reassembler) clearSlot(index int) {
 	s := &r.slots[index]
-	if s.state != slotFree && !s.detached {
+	if s.state == slotFree {
+		return
+	}
+	if !s.detached {
 		r.removeKey(s.key)
 	}
 
@@ -415,7 +441,9 @@ func (r *Reassembler) clearSlot(index int) {
 	*s = slot{
 		generation: generation,
 		buf:        buf[:r.config.MaxPacketSize:r.config.MaxPacketSize],
+		freeNext:   r.freeHead,
 	}
+	r.freeHead = index
 }
 
 func keyIndexSize(slots int) (int, error) {

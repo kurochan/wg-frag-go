@@ -41,6 +41,7 @@ All WGF-specific settings belong in `[Interface]`.
 | `WGFReorder` | `true` | `true` or `false` | Enables short completed-packet reordering per wire lane. |
 | `WGFReorderMaxDelay` | `10ms` | Positive Go duration | Maximum time to hold a reorder gap before skipping it. |
 | `WGFSocketBuffer` | `3145728` | `65536` through `268435456` bytes | Requested size for each outer UDP send and receive buffer. The kernel may cap the effective size. |
+| `WGFUDPBatchSize` | `256` | `128` or `256` (Linux) | Maximum UDP datagrams handled by one Linux receive call. `256` is the default and can reduce syscall frequency on high-rate paths at the cost of a larger fixed receive pool; set `128` to match the wireguard-go default. The WGF TUN wrapper keeps the native 128-entry TUN batch boundary. On non-Linux platforms, only the default is accepted and the setting has no effect. |
 | `WGFWorkers` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one shim worker and logs a warning for an explicit value. |
 | `WGFTUNQueues` | `auto` | `auto` or positive integer | Accepted for forward compatibility. v1 uses one TUN queue and logs a warning for an explicit value. |
 | `WGFMetrics` | `off` | `off` or `on` | Enables the unauthenticated OpenMetrics endpoint. |
@@ -50,6 +51,17 @@ All WGF-specific settings belong in `[Interface]`.
 
 See [Monitoring](monitoring.md) for endpoint behavior, metric selection,
 labels, and the metric inventory.
+
+`WGFUDPBatchSize` takes effect when the interface runtime starts or restarts;
+it is not adjusted while traffic is running. With UDP GRO enabled, the bind
+reserves room for the worst-case 64 datagrams per kernel message: `128` allows
+two kernel messages per read, and `256` allows four. Reads do not wait to fill
+the batch. The larger value does not guarantee higher throughput. With the
+current Linux wireguard-go dependency and both address families active, it
+also adds approximately 24 MiB of packet-buffer capacity per interface across
+the UDP and TUN readers, plus batch metadata. This is a capacity estimate, not
+a measured RSS increase. The native TUN and WGF carrier queues keep their
+existing sizes. Use `WGFSocketBuffer` separately to tune kernel buffers in bytes.
 
 The reassembly allocation for one peer is approximately
 `WGFPeerReassemblySlots * MTU`, plus metadata and completed-packet/reorder

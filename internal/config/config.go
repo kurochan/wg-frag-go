@@ -29,6 +29,14 @@ const (
 	// MinSocketBuffer and MaxSocketBuffer bound WGFSocketBuffer.
 	MinSocketBuffer = 64 << 10
 	MaxSocketBuffer = 256 << 20
+	// DefaultUDPBatchSize is the default number of UDP datagrams handled per
+	// receive/send call on Linux. The larger supported batch reduces syscall
+	// frequency on high-rate paths; set 128 to match wireguard-go's native batch.
+	DefaultUDPBatchSize = 256
+	// MinUDPBatchSize and MaxUDPBatchSize describe the supported Linux tuning
+	// range. Values are restricted to powers of two supported by the WGF bind.
+	MinUDPBatchSize = 128
+	MaxUDPBatchSize = 256
 	// DefaultMaxCarrierPayload is the conservative ceiling for an IPv4 outer path.
 	DefaultMaxCarrierPayload = 65432
 	// MaxCarrierPayload is the protocol ceiling for an IPv6 outer path.
@@ -73,6 +81,7 @@ type Interface struct {
 	Workers             AutoCount
 	TUNQueues           AutoCount
 	SocketBuffer        int
+	UDPBatchSize        int
 	Metrics             bool
 	MetricsListen       MetricsListen
 	MetricsInclude      []string
@@ -148,6 +157,7 @@ const (
 	interfaceWorkers
 	interfaceTUNQueues
 	interfaceSocketBuffer
+	interfaceUDPBatchSize
 	interfaceFwMark
 	interfaceMetrics
 	interfaceMetricsListen
@@ -296,6 +306,7 @@ func defaultConfig() Config {
 		Workers:             AutoCount{Auto: true},
 		TUNQueues:           AutoCount{Auto: true},
 		SocketBuffer:        DefaultSocketBuffer,
+		UDPBatchSize:        DefaultUDPBatchSize,
 		MetricsListen:       MetricsListen{Auto: true},
 	}}
 }
@@ -416,6 +427,16 @@ func (p *parser) parseInterfaceField(name, value string) error {
 			return fmt.Errorf("WGFSocketBuffer: %d is outside %d..%d bytes", count, MinSocketBuffer, MaxSocketBuffer)
 		}
 		p.config.Interface.SocketBuffer = count
+	case "WGFUDPBatchSize":
+		field = interfaceUDPBatchSize
+		count, err := parsePositiveInt(value)
+		if err != nil {
+			return fmt.Errorf("WGFUDPBatchSize: %w", err)
+		}
+		if err := ValidateUDPBatchSize(count); err != nil {
+			return err
+		}
+		p.config.Interface.UDPBatchSize = count
 	case "WGFReassemblySlots":
 		field = interfaceReassemblySlots
 		count, err := parsePositiveInt(value)
@@ -528,7 +549,7 @@ func (p *parser) parsePeerField(name, value string) error {
 		peer.Endpoint = value
 	case "PresharedKey":
 		field = peerPresharedKey
-		key, err := parsePresharedKey(value)
+		key, err := decodeKey(value)
 		if err != nil {
 			return fmt.Errorf("PresharedKey: %w", err)
 		}
@@ -619,6 +640,9 @@ func Validate(cfg *Config) error {
 	if !iface.TUNQueues.Auto && iface.TUNQueues.Count <= 0 {
 		return errors.New("WGFTUNQueues must be positive or auto")
 	}
+	if err := ValidateUDPBatchSize(iface.UDPBatchSize); err != nil {
+		return err
+	}
 	if iface.ReassemblyLifetime < minReassemblyLifetime || iface.ReassemblyLifetime > maxReassemblyLifetime {
 		return fmt.Errorf("WGFReassemblyLifetime must be in %s..%s", minReassemblyLifetime, maxReassemblyLifetime)
 	}
@@ -630,6 +654,14 @@ func Validate(cfg *Config) error {
 	}
 
 	return ValidatePeers(cfg.Peers)
+}
+
+// ValidateUDPBatchSize checks the supported Linux UDP batch capacities.
+func ValidateUDPBatchSize(size int) error {
+	if size != MinUDPBatchSize && size != MaxUDPBatchSize {
+		return fmt.Errorf("WGFUDPBatchSize must be %d or %d", MinUDPBatchSize, MaxUDPBatchSize)
+	}
+	return nil
 }
 
 // ValidatePeers validates peer identities shared by file parsing and runtime
@@ -655,20 +687,17 @@ func ValidatePeers(peers []Peer) error {
 }
 
 func parseKey(value string) (Key, error) {
-	var key Key
-	decoded, err := base64.StdEncoding.DecodeString(value)
-	if err != nil || len(decoded) != len(key) {
-		return Key{}, errors.New("must be base64 encoding of exactly 32 bytes")
+	key, err := decodeKey(value)
+	if err != nil {
+		return Key{}, err
 	}
-
-	copy(key[:], decoded)
 	if key == (Key{}) {
 		return Key{}, errors.New("all-zero key is not allowed")
 	}
 	return key, nil
 }
 
-func parsePresharedKey(value string) (Key, error) {
+func decodeKey(value string) (Key, error) {
 	var key Key
 	decoded, err := base64.StdEncoding.DecodeString(value)
 	if err != nil || len(decoded) != len(key) {
