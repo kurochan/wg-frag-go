@@ -5,17 +5,6 @@ It is useful for development and regression checks, but its measurements are
 not the primary end-to-end reference values; see [`benchmark.md`](benchmark.md)
 for the AWS reference results.
 
-The 2026-09-05 Lima evidence is preserved in [`docs/benchmarks/`](benchmarks/);
-these are development observations rather than replacements for the AWS
-reference.
-
-| Scope | Structured results | Raw logs |
-| --- | --- | --- |
-| Initial development comparison, including rejected experiments and startup failures | [results](benchmarks/lima-2026-09-05.json) | [logs and commands](benchmarks/lima-2026-09-05-raw.tar.gz) |
-| UDP batch 128/256, before the later CONTROL startup investigation | [results](benchmarks/lima-2026-09-05-udp-batch.json) | [logs](benchmarks/lima-2026-09-05-udp-batch-raw.tar.gz) |
-| CONTROL retry fix | [startup results](benchmarks/lima-2026-09-05-control-startup.json) | [diagnostic logs](benchmarks/lima-2026-09-05-control-startup-raw.tar.gz) |
-| Send-buffer headroom comparison | [throughput results](benchmarks/lima-2026-09-05-headroom.json) | [logs](benchmarks/lima-2026-09-05-headroom-raw.tar.gz) |
-
 The adopted Linux runtime default is `WGFUDPBatchSize=256`; `128` remains an
 explicit tuning option. The capability startup fast-retry window is 130
 seconds. These settings are independent of the configured inner MTU.
