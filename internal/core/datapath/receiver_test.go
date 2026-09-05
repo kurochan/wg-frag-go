@@ -183,6 +183,55 @@ func TestReceiverReordersAndValidatesSource(t *testing.T) {
 	}
 }
 
+func TestReceiverReorderDeadlineIsIndependentOfReassemblyExpiration(t *testing.T) {
+	t.Parallel()
+	r := newReceiver(t, true)
+	now := time.Unix(1, 0)
+	sink := &captureSink{}
+	if err := r.AcceptCarrier(now, outer(t, 1, ipv4Packet(10, 1)), sink); err != nil {
+		t.Fatal(err)
+	}
+	wantDeadline := now.Add(10 * time.Millisecond)
+	if got := r.NextReorderDeadline(); !got.Equal(wantDeadline) {
+		t.Fatalf("NextReorderDeadline() = %v, want %v", got, wantDeadline)
+	}
+	if expired := r.ExpireReassembly(wantDeadline); expired != 0 {
+		t.Fatalf("ExpireReassembly() = %d, want 0", expired)
+	}
+	if err := r.TickReorder(wantDeadline.Add(-time.Nanosecond), sink); err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.packets) != 0 {
+		t.Fatalf("reorder delivered before deadline: %d packets", len(sink.packets))
+	}
+	if err := r.TickReorder(wantDeadline, sink); err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.packets) != 1 {
+		t.Fatalf("reorder delivered at deadline = %d, want 1", len(sink.packets))
+	}
+	if got := r.NextReorderDeadline(); !got.IsZero() {
+		t.Fatalf("NextReorderDeadline() after flush = %v, want zero", got)
+	}
+}
+
+func TestReceiverReorderDeadlineTracksOlderTimestampOnAnotherLane(t *testing.T) {
+	t.Parallel()
+	r := newReceiver(t, true)
+	later := time.Unix(20, 0)
+	earlier := time.Unix(10, 0)
+	if err := r.AcceptCarrier(later, outerLane(t, 0, 1, ipv4Packet(10, 1)), discardSink{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.AcceptCarrier(earlier, outerLane(t, 1, 1, ipv4Packet(10, 2)), discardSink{}); err != nil {
+		t.Fatal(err)
+	}
+	want := earlier.Add(10 * time.Millisecond)
+	if got := r.NextReorderDeadline(); !got.Equal(want) {
+		t.Fatalf("NextReorderDeadline() = %v, want %v", got, want)
+	}
+}
+
 func TestReceiverReorderBudgetIsSharedAcrossLanes(t *testing.T) {
 	t.Parallel()
 	allowed, err := peerroute.NewSnapshot([]peerroute.AllowedIP{{Prefix: netip.MustParsePrefix("10.0.0.0/24"), PeerID: 42}})

@@ -1,6 +1,7 @@
 package datapath
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net/netip"
 	"testing"
@@ -9,6 +10,59 @@ import (
 	"github.com/kurochan/wg-frag-go/internal/core/carrier"
 	"github.com/kurochan/wg-frag-go/internal/core/peerroute"
 )
+
+// BenchmarkReceiverFragmented1500 measures reassembly, source validation and
+// ordering together, independently of encryption and platform I/O.
+func BenchmarkReceiverFragmented1500(b *testing.B) {
+	for _, lanes := range []int{1, 64} {
+		b.Run(fmt.Sprintf("lanes=%d", lanes), func(b *testing.B) {
+			r, err := NewPayloadReceiver(benchmarkReceiverConfig(256, 64))
+			if err != nil {
+				b.Fatal(err)
+			}
+			packet := make([]byte, 1500)
+			packet[0] = 0x45
+			binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
+			copy(packet[12:16], []byte{10, 0, 0, 1})
+			copy(packet[16:20], []byte{10, 0, 0, 2})
+			var frames [2][]byte
+			for i := range frames {
+				frames[i] = make([]byte, carrier.HeaderSize+750)
+				_, err := carrier.MarshalTo(frames[i], carrier.Header{
+					DataSessionID: 1, FragmentCount: 2,
+					FragmentIndex: uint8(i), Offset: uint16(i * 750),
+				}, packet[i*750:(i+1)*750])
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			sink := benchmarkCountingSink{}
+			now := time.Unix(1, 0)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for _, frame := range frames {
+					frame[3] = byte(i % lanes)
+					binary.BigEndian.PutUint32(frame[6:10], uint32(i/lanes))
+					if err := r.AcceptPayload(now, frame, &sink); err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+			b.StopTimer()
+			if sink.count != b.N {
+				b.Fatalf("delivered %d packets, want %d", sink.count, b.N)
+			}
+		})
+	}
+}
+
+type benchmarkCountingSink struct{ count int }
+
+func (s *benchmarkCountingSink) DeliverInner([]byte) error {
+	s.count++
+	return nil
+}
 
 type benchmarkSink struct{}
 

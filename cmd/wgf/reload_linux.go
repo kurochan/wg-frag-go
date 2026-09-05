@@ -380,8 +380,6 @@ func submitReloadRestart(
 	spec := controlconfig.SpecFromConfig(ifname, desired, true)
 	if includePrivateKey {
 		spec.SetPrivateKey(append([]byte(nil), desired.Interface.PrivateKey[:]...))
-	} else {
-		spec.ClearPrivateKey()
 	}
 	target := controlapiv1.InterfaceRef_builder{}.Build()
 	target.SetInterfaceName(ifname)

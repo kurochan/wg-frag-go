@@ -511,6 +511,77 @@ func TestDeliverInnerHonorsNativeWriteOffset(t *testing.T) {
 	}
 }
 
+func TestReorderDeadlineFlushesBeforeReassemblyTicker(t *testing.T) {
+	native := newFakeTUN("a", 1500)
+	config := pairConfig(t, native, true, 64)
+	config.ExpirationInterval = 5 * time.Second
+	config.Peers[0].Receiver.Lifetime = 10 * time.Second
+	config.Peers[0].Receiver.ReorderEnabled = true
+	config.Peers[0].Receiver.ReorderCapacity = 4
+	config.Peers[0].Receiver.ReorderMaxDelay = 10 * time.Millisecond
+	d, err := New(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	// Build two carriers so the second one starts behind a missing sequence.
+	// The test sends only sequence 1 and relies on the reorder deadline to flush
+	// it; waiting for the reassembly ticker would take 5 seconds.
+	collector := &carrierCollector{}
+	senderConfig := config.Peers[0].Sender
+	senderConfig.CarrierSource = config.Peers[0].Receiver.CarrierSource
+	senderConfig.CarrierDest = config.Peers[0].Receiver.CarrierDest
+	sender, err := datapath.NewSender(senderConfig, collector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for marker := byte(0); marker < 2; marker++ {
+		packet := ipv4Packet(1, marker, 80)
+		copy(packet[12:16], []byte{10, 2, 0, 1})
+		copy(packet[16:20], []byte{10, 2, 0, marker + 1})
+		if err := sender.Add(packet); err != nil {
+			t.Fatal(err)
+		}
+		if err := sender.Flush(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(collector.carriers) != 2 {
+		t.Fatalf("carrier count = %d, want 2", len(collector.carriers))
+	}
+
+	started := time.Now()
+	if n, err := d.Write(collector.carriers[1:], 0); err != nil || n != 1 {
+		t.Fatalf("Write() = (%d, %v), want (1, nil)", n, err)
+	}
+	waitFor(t, func() bool { return len(native.written()) == 1 })
+	elapsed := time.Since(started)
+	t.Logf("reorder deadline flush latency: %v", elapsed)
+	if elapsed >= 200*time.Millisecond {
+		t.Fatalf("reorder flush took %v, want less than 200ms (reassembly ticker is %v)", elapsed, config.ExpirationInterval)
+	}
+}
+
+func TestTimerRecognizesPublishedRetiredPeer(t *testing.T) {
+	native := newFakeTUN("a", 1500)
+	d, err := New(pairConfig(t, native, true, 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	oldPeer := d.table.Load().peers[0]
+	if err := d.Reconfigure(nil, []peerroute.PeerID{0}, nil); err != nil {
+		t.Fatal(err)
+	}
+	oldPeer.rxMu.Lock()
+	defer oldPeer.rxMu.Unlock()
+	if d.peerIsCurrentLocked(oldPeer) {
+		t.Fatal("retired peer was still considered current after table publication")
+	}
+}
+
 func TestTooManySegmentsDoesNotCloseDeviceAfterBatch(t *testing.T) {
 	t.Parallel()
 	packet := ipv4Packet(10, 0, 80)

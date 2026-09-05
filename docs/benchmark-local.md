@@ -1,9 +1,13 @@
 # Local Lima benchmark and validation
 
-This document preserves the local, host-based Linux integration procedure.
+This document preserves the local, Lima-based Linux integration procedure.
 It is useful for development and regression checks, but its measurements are
 not the primary end-to-end reference values; see [`benchmark.md`](benchmark.md)
 for the AWS reference results.
+
+The adopted Linux runtime default is `WGFUDPBatchSize=256`; `128` remains an
+explicit tuning option. The capability startup fast-retry window is 130
+seconds. These settings are independent of the configured inner MTU.
 
 ## 1. Prepare the Lima VM
 
@@ -92,17 +96,21 @@ limactl shell wgf-bench -- sudo sh -lc '
 Fault-injection variants:
 
 ```bash
-WGF_RUN_NETNS=1 WGF_NETNS_CONTROL_RECOVERY=1 \
-  go test -tags=integration -count=1 \
-  -run '^TestWGFNetNSWireGuardUDP$' ./cmd/wgf
+limactl shell wgf-bench -- sudo sh -lc '
+  chmod 0755 /tmp/wgf-netns-integration.test
 
-WGF_RUN_NETNS=1 WGF_NETNS_BASE_FAILURE_RECOVERY=1 \
-  go test -tags=integration -count=1 \
-  -run '^TestWGFNetNSWireGuardUDP$' ./cmd/wgf
+  WGF_RUN_NETNS=1 WGF_NETNS_CONTROL_RECOVERY=1 \
+    /tmp/wgf-netns-integration.test \
+    -test.v -test.run "^TestWGFNetNSWireGuardUDP$"
 
-WGF_RUN_NETNS=1 WGF_NETNS_NO_UNDERLAY_FRAGMENTATION=1 \
-  go test -tags=integration -count=1 \
-  -run '^TestWGFNetNSWireGuardUDP$' ./cmd/wgf
+  WGF_RUN_NETNS=1 WGF_NETNS_BASE_FAILURE_RECOVERY=1 \
+    /tmp/wgf-netns-integration.test \
+    -test.v -test.run "^TestWGFNetNSWireGuardUDP$"
+
+  WGF_RUN_NETNS=1 WGF_NETNS_NO_UNDERLAY_FRAGMENTATION=1 \
+    /tmp/wgf-netns-integration.test \
+    -test.v -test.run "^TestWGFNetNSWireGuardUDP$"
+'
 ```
 
 With `WGF_NETNS_REQUIRE_PMTU=1`, the TCP measurement starts only after both
@@ -121,6 +129,56 @@ limactl shell wgf-bench -- sudo sh -lc '
     -test.v -test.run "^TestWGFNetNSWireGuardUDP$"
 '
 ```
+
+For repeated comparisons on a known path, optionally set
+`WGF_NETNS_MAX_CARRIER_PAYLOAD=1400` on both builds to cap the PMTU search.
+This sets the normal `WGFMaxCarrierPayload` configuration; CONTROL exchange
+and PMTU confirmation still run. Keep `WGF_NETNS_REQUIRE_PMTU=1` and verify
+that both runs report the same confirmed payload. Omit the ceiling when
+validating discovery from the production default. This does not change the
+inner MTU.
+
+`WGF_NETNS_UDP_BATCH_SIZE` optionally sets `WGFUDPBatchSize` on both endpoints
+for UDP batch tuning. Omit it to exercise the production default. Keep the
+inner MTU, socket buffer, GOMAXPROCS, and PMTU ceiling identical when comparing
+batch sizes. This setting changes the packet batch capacity, not the kernel
+socket buffer in bytes (`WGFSocketBuffer`).
+
+To approximate an inter-site path, the integration test can install netem on
+both disposable underlay veth devices. For example:
+
+```bash
+limactl shell wgf-bench -- sudo env \
+  WGF_RUN_NETNS=1 WGF_NETNS_MTU=1500 WGF_NETNS_REQUIRE_PMTU=1 \
+  WGF_NETNS_MAX_CARRIER_PAYLOAD=1400 WGF_NETNS_DELAY=20ms \
+  WGF_NETNS_JITTER=5ms WGF_NETNS_RATE_MBIT=200 \
+  WGF_NETNS_BENCH_BYTES=8388608 \
+  /tmp/wgf-netns-integration.test -test.v \
+  -test.run '^TestWGFNetNSWireGuardUDP$'
+```
+
+The delay and jitter apply **per direction** (approximately 40ms base RTT in
+this example). `WGF_NETNS_LOSS_PERCENT=0.1` optionally adds 0.1% netem loss
+in each direction. Repeat with `WGF_NETNS_MTU=9600` for larger inner packets;
+both inner MTUs require WGF fragmentation at a carrier payload of 1400 bytes.
+The queue limit is 10000; the rate is optional. Settings apply during CONTROL
+and DATA traffic, and namespace cleanup removes the qdiscs. With delay set,
+the test reports 24 small UDP RTT samples before and after TCP, including
+timeouts; these are not loaded-latency percentiles. GSO/GRO remain enabled
+when supported, so netem loss on a veth skb is not necessarily independent
+loss of individual wire datagrams. Record that distinction when interpreting
+the results. Use smaller byte counts than the local benchmark so a slow WAN
+case stays within the TCP test's 60-second deadline. The 8 MiB example measures
+a short transfer including slow start, not steady-state WAN capacity. Increase
+the byte count for sustained-load measurements after a successful smoke test.
+
+For startup diagnosis, `WGF_NETNS_STARTUP_ONLY=1` stops after CONTROL readiness,
+the UDP echo check, and any requested PMTU confirmation; it skips RTT sampling
+and TCP measurement. The capability fast-retry window is 130 seconds; this is
+separate from the CONTROL readiness wait and the TCP measurement's 60-second
+deadline. `WGF_NETNS_LOG_RUNNERS=1` preserves endpoint logs even on success.
+Combine it with `WGF_LOG_LEVEL=debug` to include WireGuard handshake events.
+Do not use this logging mode for throughput comparisons.
 
 Measurement rules:
 

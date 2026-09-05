@@ -12,7 +12,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	source := netip.MustParseAddr("fe80::1")
 	destination := netip.MustParseAddr("fe80::2")
 	payload := []byte{1, 2, 3}
-	packet := make([]byte, IPv6HeaderSize+len(payload))
+	packet := bytes.Repeat([]byte{0xa5}, IPv6HeaderSize+len(payload))
 
 	n, err := MarshalEnvelopeTo(packet, source, destination, payload)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	if n != len(packet) {
 		t.Fatalf("MarshalEnvelopeTo() = %d, want %d", n, len(packet))
 	}
-	if packet[0] != 0x60 || packet[6] != CarrierNextHeader || packet[7] != carrierHopLimit {
+	if !bytes.Equal(packet[:4], []byte{0x60, 0, 0, 0}) || packet[6] != CarrierNextHeader || packet[7] != carrierHopLimit {
 		t.Fatalf("unexpected IPv6 fixed fields: %x", packet[:8])
 	}
 
@@ -35,6 +35,48 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	packet[IPv6HeaderSize] = 9
 	if envelope.Payload[0] != 9 {
 		t.Fatal("payload does not alias packet")
+	}
+}
+
+func TestMarshalEnvelopeToAcceptsPayloadAlreadyAtIPv6Headroom(t *testing.T) {
+	t.Parallel()
+	source := netip.MustParseAddr("fe80::1")
+	destination := netip.MustParseAddr("fe80::2")
+	want := []byte{1, 2, 3, 4, 5}
+	packet := bytes.Repeat([]byte{0xa5}, IPv6HeaderSize+len(want))
+	copy(packet[IPv6HeaderSize:], want)
+
+	n, err := MarshalEnvelopeTo(packet, source, destination, packet[IPv6HeaderSize:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(packet) || !bytes.Equal(packet[IPv6HeaderSize:], want) {
+		t.Fatalf("headroom payload = (%d, %x), want (%d, %x)", n, packet[IPv6HeaderSize:], len(packet), want)
+	}
+	if !bytes.Equal(packet[:4], []byte{0x60, 0, 0, 0}) {
+		t.Fatalf("IPv6 first word = %x, want 60000000", packet[:4])
+	}
+}
+
+func TestMarshalEnvelopeToSupportsEmptyPayload(t *testing.T) {
+	t.Parallel()
+	source := netip.MustParseAddr("fe80::1")
+	destination := netip.MustParseAddr("fe80::2")
+	packet := bytes.Repeat([]byte{0xa5}, IPv6HeaderSize)
+
+	n, err := MarshalEnvelopeTo(packet, source, destination, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != IPv6HeaderSize {
+		t.Fatalf("empty payload size = %d, want %d", n, IPv6HeaderSize)
+	}
+	envelope, err := ParseEnvelope(packet, source, destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Payload) != 0 {
+		t.Fatalf("empty payload length = %d, want 0", len(envelope.Payload))
 	}
 }
 

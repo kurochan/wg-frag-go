@@ -95,12 +95,6 @@ func (manager *Manager) retainCounters(publicKey [32]byte, counters *controlapiv
 
 func addShimCounters(left, right *controlapiv1.ShimCounters) *controlapiv1.ShimCounters {
 	result := controlapiv1.ShimCounters_builder{}.Build()
-	if left == nil {
-		left = controlapiv1.ShimCounters_builder{}.Build()
-	}
-	if right == nil {
-		right = controlapiv1.ShimCounters_builder{}.Build()
-	}
 	result.SetTxCarriers(left.GetTxCarriers() + right.GetTxCarriers())
 	result.SetTxPacketDrops(left.GetTxPacketDrops() + right.GetTxPacketDrops())
 	result.SetTxNativeFragmentDrops(left.GetTxNativeFragmentDrops() + right.GetTxNativeFragmentDrops())

@@ -279,6 +279,93 @@ func TestCompletedSlotProtection(t *testing.T) {
 	}
 }
 
+func TestFreeSlotListPreservesReleaseAndGenerationSemantics(t *testing.T) {
+	t.Parallel()
+	config := testConfig()
+	config.Slots = 2
+	config.PerPeerSlots = 2
+	r := mustNew(t, config)
+	now := time.Unix(100, 0)
+
+	first, err := r.Accept(now, testKey(0, 1), testRecord(testKey(0, 1), 0, 1, 0, "first"))
+	if err != nil || first.Status != StatusCompleted {
+		t.Fatalf("first completion = (%+v, %v)", first, err)
+	}
+	second, err := r.Accept(now, testKey(0, 2), testRecord(testKey(0, 2), 0, 1, 0, "second"))
+	if err != nil || second.Status != StatusCompleted {
+		t.Fatalf("second completion = (%+v, %v)", second, err)
+	}
+	if r.freeHead != -1 {
+		t.Fatalf("freeHead with all completed slots = %d, want -1", r.freeHead)
+	}
+
+	if err := r.Release(first.Packet.Handle); err != nil {
+		t.Fatalf("Release(first) error = %v", err)
+	}
+	if r.freeHead != first.Packet.Handle.index {
+		t.Fatalf("freeHead after Release(first) = %d, want %d", r.freeHead, first.Packet.Handle.index)
+	}
+	if err := r.Release(first.Packet.Handle); !errors.Is(err, ErrInvalidHandle) {
+		t.Fatalf("duplicate Release(first) error = %v, want %v", err, ErrInvalidHandle)
+	}
+
+	reused, err := r.Accept(now, testKey(0, 3), testRecord(testKey(0, 3), 0, 1, 0, "reused"))
+	if err != nil || reused.Status != StatusCompleted {
+		t.Fatalf("reused completion = (%+v, %v)", reused, err)
+	}
+	if reused.Packet.Handle.index != first.Packet.Handle.index {
+		t.Fatalf("reused slot index = %d, want %d", reused.Packet.Handle.index, first.Packet.Handle.index)
+	}
+	if reused.Packet.Handle.generation == first.Packet.Handle.generation {
+		t.Fatal("reused slot generation did not advance")
+	}
+	if err := r.Release(first.Packet.Handle); !errors.Is(err, ErrInvalidHandle) {
+		t.Fatalf("stale Release(first) error = %v, want %v", err, ErrInvalidHandle)
+	}
+	if got := r.findKey(testKey(0, 3)); got != reused.Packet.Handle.index {
+		t.Fatalf("reused key index = %d, want %d", got, reused.Packet.Handle.index)
+	}
+
+	if err := r.Release(second.Packet.Handle); err != nil {
+		t.Fatalf("Release(second) error = %v", err)
+	}
+	if err := r.Release(reused.Packet.Handle); err != nil {
+		t.Fatalf("Release(reused) error = %v", err)
+	}
+	if r.freeHead != 0 || r.slots[0].freeNext != 1 || r.slots[1].freeNext != -1 {
+		t.Fatalf("free list after all releases = head %d, nexts [%d,%d]", r.freeHead, r.slots[0].freeNext, r.slots[1].freeNext)
+	}
+}
+
+func TestFreeSlotListReusesEvictedSlotWithoutScanState(t *testing.T) {
+	t.Parallel()
+	config := testConfig()
+	config.Slots = 2
+	config.PerPeerSlots = 2
+	r := mustNew(t, config)
+	now := time.Unix(100, 0)
+	a := testKey(0, 1)
+	b := testKey(0, 2)
+	c := testKey(0, 3)
+
+	if _, err := r.Accept(now, a, testRecord(a, 0, 2, 0, "a")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Accept(now.Add(time.Millisecond), b, testRecord(b, 0, 2, 0, "b")); err != nil {
+		t.Fatal(err)
+	}
+	result, err := r.Accept(now.Add(2*time.Millisecond), c, testRecord(c, 0, 2, 0, "c"))
+	if err != nil || !result.Evicted {
+		t.Fatalf("eviction Accept() = (%+v, %v)", result, err)
+	}
+	if r.freeHead != -1 {
+		t.Fatalf("freeHead after replacement = %d, want -1", r.freeHead)
+	}
+	if r.findKey(a) >= 0 || r.findKey(b) < 0 || r.findKey(c) < 0 {
+		t.Fatal("free-list replacement corrupted active key index")
+	}
+}
+
 func TestCompletedSlotBlocksPeerQuota(t *testing.T) {
 	t.Parallel()
 	config := testConfig()

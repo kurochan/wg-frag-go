@@ -244,6 +244,10 @@ func (r *Reorderer) contains(sequence uint32) bool {
 }
 
 func (r *Reorderer) drainContiguous(out []reassembly.Packet) int {
+	if r.count == 0 {
+		return 0
+	}
+
 	n := 0
 
 	for {

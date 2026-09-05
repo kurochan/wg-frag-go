@@ -236,29 +236,45 @@ func (d *WireGuardTUN) Read(bufs [][]byte, sizes []int, offset int) (int, error)
 	if !d.initialized() {
 		return 0, ErrWireGuardTUNConfig
 	}
-	if offset < 0 || len(bufs) == 0 || len(sizes) < len(bufs) || len(bufs) > len(d.txDesc) {
+	if offset < 0 || len(bufs) == 0 || len(sizes) < len(bufs) {
 		return 0, shimtun.ErrShortBuffer
+	}
+	// wireguard-go uses the maximum of the Bind and TUN batch sizes. A
+	// configurable UDP Bind may therefore pass more buffers than this shim's
+	// native TUN batch. Return a bounded prefix; the caller reuses the full
+	// slice and subsequent reads drain any remaining queued packets. The full
+	// input length is still checked above so the caller's sizes slice satisfies
+	// the tun.Device contract.
+	readBufs := bufs
+	if len(readBufs) > len(d.txDesc) {
+		readBufs = readBufs[:len(d.txDesc)]
+	}
+	// Validate every destination before publishing any descriptor. A short
+	// buffer must not leave a borrowed slice in txDesc after Read returns.
+	for i := range readBufs {
+		if offset > len(readBufs[i]) || carrier.IPv6HeaderSize > len(readBufs[i])-offset {
+			return 0, shimtun.ErrShortBuffer
+		}
 	}
 
 	for {
 		d.txMu.Lock()
-		for i := range bufs {
-			if offset > len(bufs[i]) {
-				d.txMu.Unlock()
-				return 0, shimtun.ErrShortBuffer
-			}
-			d.txDesc[i] = transport.TXDescriptor{Payload: bufs[i][offset:]}
+		for i := range readBufs {
+			// Leave room for the synthetic IPv6 header. The shim writes the
+			// payload directly where MarshalEnvelopeTo will find it, avoiding a
+			// second payload-sized move on every carrier.
+			d.txDesc[i] = transport.TXDescriptor{Payload: readBufs[i][offset+carrier.IPv6HeaderSize:]}
 		}
-		n, err := d.shim.ReadPayloads(d.txDesc[:len(bufs)])
+		n, err := d.shim.ReadPayloads(d.txDesc[:len(readBufs)])
 		if errors.Is(err, shimtun.ErrReadInterrupted) {
-			clear(d.txDesc[:len(bufs)])
+			clear(d.txDesc[:len(readBufs)])
 			d.txMu.Unlock()
 			d.waitForReconfigure()
 
 			continue
 		}
 		if err != nil {
-			clear(d.txDesc[:len(bufs)])
+			clear(d.txDesc[:len(readBufs)])
 			d.txMu.Unlock()
 			return n, err
 		}
@@ -267,25 +283,25 @@ func (d *WireGuardTUN) Read(bufs [][]byte, sizes []int, offset int) (int, error)
 			descriptor := d.txDesc[i]
 			payload := descriptor.Bytes()
 			if payload == nil || int(descriptor.PeerID) >= len(table.byPeer) {
-				clear(d.txDesc[:len(bufs)])
+				clear(d.txDesc[:len(readBufs)])
 				d.txMu.Unlock()
 				return i, ErrWireGuardTUNConfig
 			}
 			destination := table.byPeer[descriptor.PeerID]
 			if !destination.IsValid() {
-				clear(d.txDesc[:len(bufs)])
+				clear(d.txDesc[:len(readBufs)])
 				d.txMu.Unlock()
 				return i, ErrWireGuardTUNConfig
 			}
-			length, marshalErr := carrier.MarshalEnvelopeTo(bufs[i][offset:], table.local, destination, payload)
+			length, marshalErr := carrier.MarshalEnvelopeTo(readBufs[i][offset:], table.local, destination, payload)
 			if marshalErr != nil {
-				clear(d.txDesc[:len(bufs)])
+				clear(d.txDesc[:len(readBufs)])
 				d.txMu.Unlock()
 				return i, fmt.Errorf("encode synthetic carrier: %w", marshalErr)
 			}
 			sizes[i] = length
 		}
-		clear(d.txDesc[:len(bufs)])
+		clear(d.txDesc[:len(readBufs)])
 		d.txMu.Unlock()
 		return n, nil
 	}

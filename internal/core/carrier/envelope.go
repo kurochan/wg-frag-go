@@ -55,9 +55,12 @@ func MarshalEnvelopeTo(dst []byte, source, destination netip.Addr, payload []byt
 	}
 
 	// payload may alias dst[:len(payload)] during TUN-to-WireGuard expansion.
-	// Copy it before writing the IPv6 header over that source range.
+	// Copy it before writing the IPv6 header over that source range. The TUN
+	// adapter reserves this header space, so the normal path is same-address.
 	copy(dst[IPv6HeaderSize:required], payload)
-	dst[0] = 6 << 4 // Traffic Class and Flow Label remain zero.
+	// Traffic Class and Flow Label remain zero. Write the complete word so a
+	// pooled caller buffer cannot leak stale header bits between packets.
+	binary.BigEndian.PutUint32(dst[:4], 6<<28)
 	binary.BigEndian.PutUint16(dst[4:6], uint16(len(payload)))
 	dst[6] = CarrierNextHeader
 	dst[7] = carrierHopLimit

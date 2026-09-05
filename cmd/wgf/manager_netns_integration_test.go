@@ -43,9 +43,9 @@ func TestWGFManagerNetNSLifecycle(t *testing.T) {
 	managerA.activate(t)
 	managerB.activate(t)
 	clientA := dialNetNSManager(t, managerA)
-	defer clientA.Close()
+	defer closeNetNSResource(clientA)
 	clientB := dialNetNSManager(t, managerB)
-	defer clientB.Close()
+	defer closeNetNSResource(clientB)
 
 	privateA0, publicA0 := managerTestKeyPair(t)
 	privateB0, publicB0 := managerTestKeyPair(t)
@@ -59,10 +59,18 @@ func TestWGFManagerNetNSLifecycle(t *testing.T) {
 	exchangeUDP(t, managerA.ns, managerB.ns, 1472)
 
 	indexBefore := linkIndex(t, managerA.ns, "mga0")
-	restart := restartManagedInterfaceRequest(statusA0.GetStatus(), managerInterfaceSpecWithoutPrivateKey("mga0", publicB0, "198.18.0.2:51821", "10.2.0.0/24", 51820), 3)
+	restartSpec := managerInterfaceSpecWithoutPrivateKey("mga0", publicB0, "198.18.0.2:51821", "10.2.0.0/24", 51820)
+	restartSpec.SetUdpBatchSize(128)
+	restart := restartManagedInterfaceRequest(statusA0.GetStatus(), restartSpec, 3)
 	restarted := callRestart(t, clientA, restart)
 	if restarted.GetStatus().GetGeneration() <= statusA0.GetStatus().GetGeneration() {
 		t.Fatalf("restart generation = %d, before %d", restarted.GetStatus().GetGeneration(), statusA0.GetStatus().GetGeneration())
+	}
+	if got := restarted.GetStatus().GetSpec().GetUdpBatchSize(); got != 128 {
+		t.Fatalf("restarted UDP batch size = %d, want 128", got)
+	}
+	if got := statusB0.GetStatus().GetSpec().GetUdpBatchSize(); got != 256 {
+		t.Fatalf("peer interface UDP batch size = %d, want 256", got)
 	}
 	waitForManagerLifecycle(t, clientA, restarted.GetStatus().GetRef(), controlapiv1.InterfaceLifecycle_INTERFACE_LIFECYCLE_RUNNING)
 	if got := linkIndex(t, managerA.ns, "mga0"); got != indexBefore {

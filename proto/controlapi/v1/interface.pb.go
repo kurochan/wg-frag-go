@@ -85,6 +85,7 @@ type InterfaceSpec struct {
 	xxx_hidden_SocketBuffer         uint32                 `protobuf:"varint,15,opt,name=socket_buffer,json=socketBuffer"`
 	xxx_hidden_FwMark               uint32                 `protobuf:"varint,16,opt,name=fw_mark,json=fwMark"`
 	xxx_hidden_Peers                *[]*PeerSpec           `protobuf:"bytes,17,rep,name=peers"`
+	xxx_hidden_UdpBatchSize         uint32                 `protobuf:"varint,18,opt,name=udp_batch_size,json=udpBatchSize"`
 	XXX_raceDetectHookData          protoimpl.RaceDetectHookData
 	XXX_presence                    [1]uint32
 	unknownFields                   protoimpl.UnknownFields
@@ -243,9 +244,16 @@ func (x *InterfaceSpec) GetPeers() []*PeerSpec {
 	return nil
 }
 
+func (x *InterfaceSpec) GetUdpBatchSize() uint32 {
+	if x != nil {
+		return x.xxx_hidden_UdpBatchSize
+	}
+	return 0
+}
+
 func (x *InterfaceSpec) SetInterfaceName(v string) {
 	x.xxx_hidden_InterfaceName = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 18)
 }
 
 func (x *InterfaceSpec) SetPrivateKey(v []byte) {
@@ -253,81 +261,86 @@ func (x *InterfaceSpec) SetPrivateKey(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_PrivateKey = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 18)
 }
 
 func (x *InterfaceSpec) SetListenPort(v uint32) {
 	x.xxx_hidden_ListenPort = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 18)
 }
 
 func (x *InterfaceSpec) SetMtu(v uint32) {
 	x.xxx_hidden_Mtu = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 18)
 }
 
 func (x *InterfaceSpec) SetMtuDiscovery(v string) {
 	x.xxx_hidden_MtuDiscovery = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 18)
 }
 
 func (x *InterfaceSpec) SetMinCarrierPayload(v uint32) {
 	x.xxx_hidden_MinCarrierPayload = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 18)
 }
 
 func (x *InterfaceSpec) SetMaxCarrierPayload(v uint32) {
 	x.xxx_hidden_MaxCarrierPayload = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 18)
 }
 
 func (x *InterfaceSpec) SetReassemblySlots(v uint32) {
 	x.xxx_hidden_ReassemblySlots = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 7, 18)
 }
 
 func (x *InterfaceSpec) SetPeerReassemblySlots(v uint32) {
 	x.xxx_hidden_PeerReassemblySlots = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 8, 18)
 }
 
 func (x *InterfaceSpec) SetReassemblyLifetimeMs(v uint32) {
 	x.xxx_hidden_ReassemblyLifetimeMs = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 9, 18)
 }
 
 func (x *InterfaceSpec) SetReorder(v bool) {
 	x.xxx_hidden_Reorder = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 10, 18)
 }
 
 func (x *InterfaceSpec) SetReorderMaxDelayMs(v uint32) {
 	x.xxx_hidden_ReorderMaxDelayMs = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 11, 18)
 }
 
 func (x *InterfaceSpec) SetWorkers(v uint32) {
 	x.xxx_hidden_Workers = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 12, 18)
 }
 
 func (x *InterfaceSpec) SetTunQueues(v uint32) {
 	x.xxx_hidden_TunQueues = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 13, 18)
 }
 
 func (x *InterfaceSpec) SetSocketBuffer(v uint32) {
 	x.xxx_hidden_SocketBuffer = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 14, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 14, 18)
 }
 
 func (x *InterfaceSpec) SetFwMark(v uint32) {
 	x.xxx_hidden_FwMark = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 15, 17)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 15, 18)
 }
 
 func (x *InterfaceSpec) SetPeers(v []*PeerSpec) {
 	x.xxx_hidden_Peers = &v
+}
+
+func (x *InterfaceSpec) SetUdpBatchSize(v uint32) {
+	x.xxx_hidden_UdpBatchSize = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 17, 18)
 }
 
 func (x *InterfaceSpec) HasInterfaceName() bool {
@@ -442,6 +455,13 @@ func (x *InterfaceSpec) HasFwMark() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 15)
 }
 
+func (x *InterfaceSpec) HasUdpBatchSize() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 17)
+}
+
 func (x *InterfaceSpec) ClearInterfaceName() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_InterfaceName = nil
@@ -522,6 +542,11 @@ func (x *InterfaceSpec) ClearFwMark() {
 	x.xxx_hidden_FwMark = 0
 }
 
+func (x *InterfaceSpec) ClearUdpBatchSize() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 17)
+	x.xxx_hidden_UdpBatchSize = 0
+}
+
 type InterfaceSpec_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -542,6 +567,7 @@ type InterfaceSpec_builder struct {
 	SocketBuffer         *uint32
 	FwMark               *uint32
 	Peers                []*PeerSpec
+	UdpBatchSize         *uint32
 }
 
 func (b0 InterfaceSpec_builder) Build() *InterfaceSpec {
@@ -549,70 +575,74 @@ func (b0 InterfaceSpec_builder) Build() *InterfaceSpec {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.InterfaceName != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 18)
 		x.xxx_hidden_InterfaceName = b.InterfaceName
 	}
 	if b.PrivateKey != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 18)
 		x.xxx_hidden_PrivateKey = b.PrivateKey
 	}
 	if b.ListenPort != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 18)
 		x.xxx_hidden_ListenPort = *b.ListenPort
 	}
 	if b.Mtu != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 18)
 		x.xxx_hidden_Mtu = *b.Mtu
 	}
 	if b.MtuDiscovery != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 18)
 		x.xxx_hidden_MtuDiscovery = b.MtuDiscovery
 	}
 	if b.MinCarrierPayload != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 18)
 		x.xxx_hidden_MinCarrierPayload = *b.MinCarrierPayload
 	}
 	if b.MaxCarrierPayload != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 18)
 		x.xxx_hidden_MaxCarrierPayload = *b.MaxCarrierPayload
 	}
 	if b.ReassemblySlots != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 7, 18)
 		x.xxx_hidden_ReassemblySlots = *b.ReassemblySlots
 	}
 	if b.PeerReassemblySlots != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 8, 18)
 		x.xxx_hidden_PeerReassemblySlots = *b.PeerReassemblySlots
 	}
 	if b.ReassemblyLifetimeMs != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 9, 18)
 		x.xxx_hidden_ReassemblyLifetimeMs = *b.ReassemblyLifetimeMs
 	}
 	if b.Reorder != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 10, 18)
 		x.xxx_hidden_Reorder = *b.Reorder
 	}
 	if b.ReorderMaxDelayMs != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 11, 18)
 		x.xxx_hidden_ReorderMaxDelayMs = *b.ReorderMaxDelayMs
 	}
 	if b.Workers != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 12, 18)
 		x.xxx_hidden_Workers = *b.Workers
 	}
 	if b.TunQueues != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 13, 18)
 		x.xxx_hidden_TunQueues = *b.TunQueues
 	}
 	if b.SocketBuffer != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 14, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 14, 18)
 		x.xxx_hidden_SocketBuffer = *b.SocketBuffer
 	}
 	if b.FwMark != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 15, 17)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 15, 18)
 		x.xxx_hidden_FwMark = *b.FwMark
 	}
 	x.xxx_hidden_Peers = &b.Peers
+	if b.UdpBatchSize != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 17, 18)
+		x.xxx_hidden_UdpBatchSize = *b.UdpBatchSize
+	}
 	return m0
 }
 
@@ -2408,7 +2438,7 @@ var File_controlapi_v1_interface_proto protoreflect.FileDescriptor
 
 const file_controlapi_v1_interface_proto_rawDesc = "" +
 	"\n" +
-	"\x1dcontrolapi/v1/interface.proto\x12\x11wgf.controlapi.v1\x1a\x1acontrolapi/v1/common.proto\"\x99\x05\n" +
+	"\x1dcontrolapi/v1/interface.proto\x12\x11wgf.controlapi.v1\x1a\x1acontrolapi/v1/common.proto\"\xbf\x05\n" +
 	"\rInterfaceSpec\x12%\n" +
 	"\x0einterface_name\x18\x01 \x01(\tR\rinterfaceName\x12\x1f\n" +
 	"\vprivate_key\x18\x02 \x01(\fR\n" +
@@ -2430,7 +2460,8 @@ const file_controlapi_v1_interface_proto_rawDesc = "" +
 	"tun_queues\x18\x0e \x01(\rR\ttunQueues\x12#\n" +
 	"\rsocket_buffer\x18\x0f \x01(\rR\fsocketBuffer\x12\x17\n" +
 	"\afw_mark\x18\x10 \x01(\rR\x06fwMark\x121\n" +
-	"\x05peers\x18\x11 \x03(\v2\x1b.wgf.controlapi.v1.PeerSpecR\x05peers\"\xbd\x02\n" +
+	"\x05peers\x18\x11 \x03(\v2\x1b.wgf.controlapi.v1.PeerSpecR\x05peers\x12$\n" +
+	"\x0eudp_batch_size\x18\x12 \x01(\rR\fudpBatchSize\"\xbd\x02\n" +
 	"\bPeerSpec\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\tR\tpublicKey\x12\x1a\n" +

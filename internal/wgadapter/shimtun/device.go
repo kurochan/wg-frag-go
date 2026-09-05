@@ -304,6 +304,7 @@ type Device struct {
 	nativeReadOffset     int
 	queueReady           chan struct{}
 	queueDrained         chan struct{}
+	reorderWake          chan struct{}
 	readInterrupt        chan struct{}
 	nativeWriteMu        sync.Mutex
 
@@ -450,6 +451,7 @@ func New(config Config) (*Device, error) {
 		readSizes:         make([]int, batch),
 		queueReady:        make(chan struct{}, 1),
 		queueDrained:      make(chan struct{}, 1),
+		reorderWake:       make(chan struct{}, 1),
 		readInterrupt:     make(chan struct{}, 1),
 		events:            make(chan tun.Event, batch),
 		stop:              make(chan struct{}),
@@ -695,6 +697,7 @@ func (d *Device) Reconfigure(
 	// was full before this reconfiguration freed slots.
 	d.notifyDrained()
 	d.table.Store(next)
+	d.notifyReorder()
 
 	peerOrder := make([]peerroute.PeerID, 0, len(next.peers))
 	for id, peer := range next.peers {
@@ -870,6 +873,7 @@ func (d *Device) InstallDataPlane(
 	d.queueCount = 0
 	clear(d.queueLens)
 	d.notifyDrained()
+	d.notifyReorder()
 	return nil
 }
 
@@ -1308,6 +1312,16 @@ func (d *Device) notifyQueue() {
 	}
 }
 
+// notifyReorder wakes the expiration loop after a carrier may have created a
+// new reorder gap. The channel is edge-triggered; a pending wake already
+// causes the loop to recompute the earliest deadline.
+func (d *Device) notifyReorder() {
+	select {
+	case d.reorderWake <- struct{}{}:
+	default:
+	}
+}
+
 // readNative is the sole owner of readBufs, readSizes, and Sender. It holds
 // txMu while building one complete native batch, making publication atomic.
 func (d *Device) readNative() {
@@ -1732,6 +1746,8 @@ func (d *Device) Write(bufs [][]byte, offset int) (int, error) {
 
 		peer.rxMu.Lock()
 		accepted := false
+		var beforeReorderDeadline time.Time
+		var afterReorderDeadline time.Time
 		if d.closed.Load() {
 			peer.rxMu.Unlock()
 			return i, ErrClosed
@@ -1746,9 +1762,14 @@ func (d *Device) Write(bufs [][]byte, offset int) (int, error) {
 			}
 			d.rxDataCarriers.Add(1)
 			accepted = true
+			beforeReorderDeadline = peer.receiver.NextReorderDeadline()
 			err = peer.receiver.AcceptCarrier(now, packet, peer.sink)
+			afterReorderDeadline = peer.receiver.NextReorderDeadline()
 		}
 		peer.rxMu.Unlock()
+		if !beforeReorderDeadline.Equal(afterReorderDeadline) {
+			d.notifyReorder()
+		}
 		if accepted && !touched.has(peer) && touched.count == len(touched.peers) {
 			// flushTouched takes the same per-peer locks, so call it after the
 			// current peer's lock is released.
@@ -1829,6 +1850,8 @@ func (d *Device) WritePayloads(batch transport.RXBatch) (int, error) {
 
 		peer.rxMu.Lock()
 		accepted := false
+		var beforeReorderDeadline time.Time
+		var afterReorderDeadline time.Time
 		var err error
 		if d.closed.Load() {
 			peer.rxMu.Unlock()
@@ -1844,9 +1867,14 @@ func (d *Device) WritePayloads(batch transport.RXBatch) (int, error) {
 			}
 			d.rxDataCarriers.Add(1)
 			accepted = true
+			beforeReorderDeadline = peer.receiver.NextReorderDeadline()
 			err = peer.receiver.AcceptPayload(now, payload, peer.sink)
+			afterReorderDeadline = peer.receiver.NextReorderDeadline()
 		}
 		peer.rxMu.Unlock()
+		if !beforeReorderDeadline.Equal(afterReorderDeadline) {
+			d.notifyReorder()
+		}
 		if accepted && !touched.has(peer) && touched.count == len(touched.peers) {
 			if flushErr := d.flushTouched(&touched); flushErr != nil {
 				peer.rxMu.Lock()
@@ -2215,36 +2243,129 @@ func (d *Device) forwardEvents() {
 
 func (d *Device) expireLoop(interval time.Duration) {
 	defer d.done.Done()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	reassemblyTicker := time.NewTicker(interval)
+	defer reassemblyTicker.Stop()
+
+	// Reorder deadlines are sparse and per-lane. Keep a one-shot timer for the
+	// earliest active gap so normal traffic does not wake the expensive
+	// reassembly scan more often than configured.
+	reorderTimer := time.NewTimer(time.Hour)
+	if !reorderTimer.Stop() {
+		<-reorderTimer.C
+	}
+	defer reorderTimer.Stop()
+	var reorderC <-chan time.Time
 
 	for {
+		reorderC = d.resetReorderTimer(reorderTimer)
 		select {
 		case <-d.stop:
 			return
-		case now := <-ticker.C:
-			for _, peer := range d.table.Load().peers {
+		case now := <-reassemblyTicker.C:
+			table := d.table.Load()
+			for _, peer := range table.peers {
 				if peer == nil || d.closed.Load() {
 					continue
 				}
 				peer.rxMu.Lock()
-				expired, err := peer.receiver.Tick(now, peer.sink)
-				d.reassemblyExpirations.Add(uint64(expired))
-				if err != nil {
-					// Policy drops from a reorder flush are not sticky failures.
-					if datapath.IsCarrierDrop(err) {
-						d.recordReceiveError(err)
-					} else {
-						d.rxAsyncErr.CompareAndSwap(nil, &err)
-					}
+				if !d.peerIsCurrentLocked(peer) {
+					peer.rxMu.Unlock()
+					continue
 				}
+				expired := peer.receiver.ExpireReassembly(now)
+				d.reassemblyExpirations.Add(uint64(expired))
 				if err := d.flushInnerLocked(peer); err != nil {
 					d.rxAsyncErr.CompareAndSwap(nil, &err)
 				}
 				peer.rxMu.Unlock()
 			}
+		case now := <-reorderC:
+			d.tickReorder(now)
+		case <-d.reorderWake:
+			// A packet may have started an earlier gap. Recompute the timer
+			// before waiting again; no packet data is processed here.
 		}
 	}
+}
+
+// resetReorderTimer arms the one-shot timer for the earliest active gap. It
+// returns a nil channel when no peer has a pending reorder gap, allowing the
+// select in expireLoop to sleep until a packet or a reassembly tick arrives.
+func (d *Device) resetReorderTimer(timer *time.Timer) <-chan time.Time {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	deadline := d.nextReorderDeadline()
+	if deadline.IsZero() {
+		return nil
+	}
+	delay := time.Until(deadline)
+	if delay < 0 {
+		delay = 0
+	}
+	timer.Reset(delay)
+	return timer.C
+}
+
+func (d *Device) nextReorderDeadline() time.Time {
+	var deadline time.Time
+	table := d.table.Load()
+	for _, peer := range table.peers {
+		if peer == nil {
+			continue
+		}
+		peer.rxMu.Lock()
+		if !d.peerIsCurrentLocked(peer) {
+			peer.rxMu.Unlock()
+			continue
+		}
+		candidate := peer.receiver.NextReorderDeadline()
+		peer.rxMu.Unlock()
+		if candidate.IsZero() || (!deadline.IsZero() && !candidate.Before(deadline)) {
+			continue
+		}
+		deadline = candidate
+	}
+	return deadline
+}
+
+func (d *Device) tickReorder(now time.Time) {
+	table := d.table.Load()
+	for _, peer := range table.peers {
+		if peer == nil || d.closed.Load() {
+			continue
+		}
+		peer.rxMu.Lock()
+		if !d.peerIsCurrentLocked(peer) {
+			peer.rxMu.Unlock()
+			continue
+		}
+		err := peer.receiver.TickReorder(now, peer.sink)
+		if err != nil {
+			// Policy drops from a reorder flush are not sticky failures.
+			if datapath.IsCarrierDrop(err) {
+				d.recordReceiveError(err)
+			} else {
+				d.rxAsyncErr.CompareAndSwap(nil, &err)
+			}
+		}
+		if flushErr := d.flushInnerLocked(peer); flushErr != nil {
+			d.rxAsyncErr.CompareAndSwap(nil, &flushErr)
+		}
+		peer.rxMu.Unlock()
+	}
+}
+
+// peerIsCurrentLocked rejects a peer from a table snapshot that was retired
+// before this timer acquired its RX lock. Reconfigure publishes the replacement
+// table only after taking removed peers' RX locks, so work that acquired the
+// lock before publication remains an allowed in-flight operation.
+func (d *Device) peerIsCurrentLocked(peer *peerState) bool {
+	table := d.table.Load()
+	return uint64(peer.id) < uint64(len(table.peers)) && table.peers[int(peer.id)] == peer
 }
 
 func isPacketError(err error) bool {

@@ -36,7 +36,8 @@ func TestParseDefaults(t *testing.T) {
 		iface.MinCarrierPayload != limits.DefaultCarrierPayload || iface.MaxCarrierPayload != DefaultMaxCarrierPayload ||
 		iface.ReassemblySlots != DefaultReassemblySlots || !iface.PeerReassemblySlots.Auto ||
 		iface.ReassemblyLifetime != 2*time.Second || !iface.Reorder || iface.ReorderMaxDelay != 10*time.Millisecond ||
-		!iface.Workers.Auto || !iface.TUNQueues.Auto || iface.SocketBuffer != DefaultSocketBuffer || iface.Metrics || !iface.MetricsListen.Auto {
+		!iface.Workers.Auto || !iface.TUNQueues.Auto || iface.SocketBuffer != DefaultSocketBuffer ||
+		iface.UDPBatchSize != DefaultUDPBatchSize || iface.Metrics || !iface.MetricsListen.Auto {
 		t.Fatalf("defaults = %+v", iface)
 	}
 	if len(iface.Addresses) != 0 || len(config.Peers) != 0 {
@@ -65,6 +66,7 @@ func TestParseAllFieldsAndRepeatedLists(t *testing.T) {
         WGFWorkers = 4
 		WGFTUNQueues = 2
 		WGFSocketBuffer = 2097152
+		WGFUDPBatchSize = 256
         WGFMetrics = on
         WGFMetricsListen = 127.0.0.1:9910,[::1]:9910
         WGFMetricsInclude = wgf_tx_*,wgf_peer_pmtu_*
@@ -93,7 +95,7 @@ func TestParseAllFieldsAndRepeatedLists(t *testing.T) {
 		iface.MinCarrierPayload != 613 || iface.MaxCarrierPayload != 1400 || iface.ReassemblySlots != 512 ||
 		iface.PeerReassemblySlots != (AutoCount{Count: 64}) || iface.ReassemblyLifetime != 1500*time.Millisecond ||
 		iface.Reorder || iface.ReorderMaxDelay != 20*time.Millisecond || iface.Workers != (AutoCount{Count: 4}) ||
-		iface.TUNQueues != (AutoCount{Count: 2}) || iface.SocketBuffer != 2<<20 || !iface.Metrics || iface.MetricsListen.Auto ||
+		iface.TUNQueues != (AutoCount{Count: 2}) || iface.SocketBuffer != 2<<20 || iface.UDPBatchSize != 256 || !iface.Metrics || iface.MetricsListen.Auto ||
 		len(iface.MetricsListen.Addresses) != 2 || len(iface.MetricsInclude) != 2 || len(iface.MetricsExclude) != 1 {
 		t.Fatalf("interface = %+v", iface)
 	}
@@ -139,6 +141,7 @@ func TestParseRejectsInvalidConfigurations(t *testing.T) {
 		{name: "auto count overflow", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFWorkers = 18446744073709551615\n"},
 		{name: "socket buffer too small", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFSocketBuffer = 65535\n"},
 		{name: "socket buffer too large", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFSocketBuffer = 268435457\n"},
+		{name: "UDP batch size unsupported", input: "[Interface]\nPrivateKey = " + privateKey + "\nWGFUDPBatchSize = 64\n"},
 		{name: "bad CIDR", input: "[Interface]\nPrivateKey = " + privateKey + "\nAddress = 10.0.0.1\n"},
 		{name: "mapped address", input: "[Interface]\nPrivateKey = " + privateKey + "\nAddress = ::ffff:192.0.2.1/128\n"},
 		{name: "mapped allowed IP", input: "[Interface]\nPrivateKey = " + privateKey + "\n[Peer]\nPublicKey = " + publicKey + "\nAllowedIPs = ::ffff:192.0.2.1/128\n"},

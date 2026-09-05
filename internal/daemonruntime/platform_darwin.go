@@ -3,8 +3,10 @@
 package daemonruntime
 
 import (
+	"errors"
 	"log/slog"
 
+	"github.com/kurochan/wg-frag-go/internal/config"
 	"github.com/kurochan/wg-frag-go/internal/platform/darwin/wgbind"
 	"github.com/kurochan/wg-frag-go/internal/platform/tunanchor"
 )
@@ -16,8 +18,16 @@ func DefaultPlatform() Platform {
 		TUNName:          func(string) string { return "utun" },
 		NativeReadOffset: 4,
 		NewBind:          func() Bind { return wgbind.New() },
+		ConfigureBind:    configureDarwinBind,
 		WarnSocketBuffer: warnDarwinSocketBuffer,
 	}
+}
+
+func configureDarwinBind(_ Bind, cfg *config.Config) error {
+	if cfg != nil && cfg.Interface.UDPBatchSize != config.DefaultUDPBatchSize {
+		return errors.New("WGFUDPBatchSize is supported on Linux only")
+	}
+	return nil
 }
 
 func warnDarwinSocketBuffer(bind Bind, logger *slog.Logger) {

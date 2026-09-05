@@ -26,6 +26,7 @@ message InterfaceSpec {
   uint32 socket_buffer = 15;
   uint32 fw_mark = 16;
   repeated PeerSpec peers = 17;
+  uint32 udp_batch_size = 18;
 }
 
 // PeerSpec is one peer in an interface desired state.

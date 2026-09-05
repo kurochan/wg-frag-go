@@ -26,6 +26,9 @@ func configureLinuxBind(bind Bind, cfg *config.Config) error {
 	if !ok {
 		return nil
 	}
+	if err := linuxBind.SetBatchSize(cfg.Interface.UDPBatchSize); err != nil {
+		return err
+	}
 	linuxBind.SetFwMark(cfg.Interface.FwMark)
 	return nil
 }

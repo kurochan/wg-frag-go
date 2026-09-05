@@ -148,6 +148,8 @@ func TestWGFNetNSWireGuardUDP(t *testing.T) {
 	configureVeth(t, runnerB.ns, vethB, "198.18.0.2/30")
 	runnerA.vethName = vethA
 	runnerB.vethName = vethB
+	applyNetNSImpairment(t, runnerA.ns, vethA)
+	applyNetNSImpairment(t, runnerB.ns, vethB)
 
 	if baseRecoveryScenario() {
 		// A 700-byte underlay can carry the handshake but not the BASE probe.
@@ -211,6 +213,12 @@ func TestWGFNetNSWireGuardUDP(t *testing.T) {
 	if os.Getenv("WGF_NETNS_REQUIRE_PMTU") == "1" || noFragmentScenario() {
 		waitForPMTU(t, runnerA, runnerB)
 	}
+	if os.Getenv("WGF_NETNS_STARTUP_ONLY") == "1" {
+		return
+	}
+	if os.Getenv("WGF_NETNS_DELAY") != "" {
+		measureNetNSLatency(t, runnerA.ns, runnerB.ns, "before TCP")
+	}
 	if raw := os.Getenv("WGF_NETNS_BENCH_BYTES"); raw != "" {
 		bytes, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || bytes <= 0 {
@@ -219,6 +227,9 @@ func TestWGFNetNSWireGuardUDP(t *testing.T) {
 		streams := netNSBenchStreams(t)
 		measureTCP(t, runnerA.ns, runnerB.ns, bytes, streams)
 		logRunnerStats(t, runnerA, runnerB)
+		if os.Getenv("WGF_NETNS_DELAY") != "" {
+			measureNetNSLatency(t, runnerA.ns, runnerB.ns, "after TCP")
+		}
 	}
 }
 
@@ -247,7 +258,7 @@ func logRunnerStats(t *testing.T, runners ...*netNSRunner) {
 	for _, runner := range runners {
 		lines := strings.Split(runner.logs.String(), "\n")
 		for i := len(lines) - 1; i >= 0; i-- {
-			if strings.Contains(lines[i], " stats: ") {
+			if strings.Contains(lines[i], "runtime stats") {
 				t.Log(strings.TrimSpace(lines[i]))
 				break
 			}
@@ -354,7 +365,7 @@ func (r *netNSRunner) stop(t *testing.T) {
 			deleteLinkBestEffort(r.ns, r.vethName)
 		}
 		_ = r.ns.Close()
-		if t.Failed() {
+		if t.Failed() || os.Getenv("WGF_NETNS_LOG_RUNNERS") == "1" {
 			// Preserve stats and goroutine dumps when the test fails. This is
 			// best effort; the process has already been asked to terminate.
 			t.Logf("runner logs:\n%s", r.logs.String())
@@ -418,7 +429,7 @@ func deleteLinkBestEffort(ns netns.NsHandle, name string) {
 	if err != nil {
 		return
 	}
-	defer current.Close()
+	defer closeNetNSResource(&current)
 	if err := netns.Set(ns); err != nil {
 		return
 	}
@@ -507,6 +518,10 @@ func waitForLink(t *testing.T, runner *netNSRunner, ifname string) {
 	t.Fatalf("timed out waiting for TUN %q; links present: %v; runner logs:\n%s", ifname, present, runner.logs.String())
 }
 
+func closeNetNSResource(resource io.Closer) {
+	_ = resource.Close()
+}
+
 func inNetNS(t *testing.T, target netns.NsHandle, fn func() error) {
 	t.Helper()
 	if err := withNetNS(target, fn); err != nil {
@@ -521,7 +536,7 @@ func withNetNS(target netns.NsHandle, fn func() error) (returnErr error) {
 	if err != nil {
 		return fmt.Errorf("get current netns: %w", err)
 	}
-	defer current.Close()
+	defer closeNetNSResource(&current)
 	if err := netns.Set(target); err != nil {
 		return fmt.Errorf("enter target netns: %w", err)
 	}
@@ -543,7 +558,7 @@ func exchangeUDP(t *testing.T, from, to netns.NsHandle, size int) {
 func exchangeUDPAddresses(t *testing.T, from, to netns.NsHandle, local, remote string, size int) {
 	t.Helper()
 	server := listenUDPInNS(t, to, remote)
-	defer server.Close()
+	defer closeNetNSResource(server)
 	go func() {
 		_ = server.SetDeadline(time.Now().Add(15 * time.Second))
 		buf := make([]byte, size+1)
@@ -561,7 +576,7 @@ func exchangeUDPAddresses(t *testing.T, from, to netns.NsHandle, local, remote s
 		}
 	}()
 	client := dialUDPInNS(t, from, local, remote)
-	defer client.Close()
+	defer closeNetNSResource(client)
 	payload := make([]byte, size)
 	for i := range payload {
 		payload[i] = byte(i)
@@ -581,7 +596,8 @@ func exchangeUDPAddresses(t *testing.T, from, to netns.NsHandle, local, remote s
 			t.Logf("UDP %d-byte inner payload: pass", size)
 			return
 		}
-		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
 			t.Fatalf("UDP read %d bytes: %v", size, err)
 		}
 	}
@@ -611,7 +627,7 @@ func measureTCPSingle(t *testing.T, from, to netns.NsHandle, size int64) {
 func measureTCPSingleAddresses(t *testing.T, from, to netns.NsHandle, local, remote string, size int64) {
 	t.Helper()
 	listener := listenTCPInNS(t, to, remote)
-	defer listener.Close()
+	defer closeNetNSResource(listener)
 	serverDone := make(chan error, 1)
 	go func() {
 		conn, err := listener.AcceptTCP()
@@ -629,7 +645,7 @@ func measureTCPSingleAddresses(t *testing.T, from, to netns.NsHandle, local, rem
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNetNSResource(conn)
 	if err := conn.SetDeadline(time.Now().Add(60 * time.Second)); err != nil {
 		t.Fatalf("set TCP deadline: %v", err)
 	}
@@ -655,6 +671,7 @@ func measureTCPSingleAddresses(t *testing.T, from, to netns.NsHandle, local, rem
 	}
 	elapsed := time.Since(started)
 	t.Logf("TCP inner_bytes=%d streams=1 elapsed=%s inner_gbps=%.3f", size, elapsed.Round(time.Millisecond), float64(size*8)/elapsed.Seconds()/1e9)
+	logNetNSTCPInfo(t, conn)
 }
 
 func measureTCPParallel(t *testing.T, from, to netns.NsHandle, perStream int64, streams int) {
@@ -664,7 +681,7 @@ func measureTCPParallel(t *testing.T, from, to netns.NsHandle, perStream int64, 
 func measureTCPParallelAddresses(t *testing.T, from, to netns.NsHandle, local, remote string, perStream int64, streams int) {
 	t.Helper()
 	listener := listenTCPInNS(t, to, remote)
-	defer listener.Close()
+	defer closeNetNSResource(listener)
 	serverDone := make(chan error, streams)
 	for range streams {
 		go func() {
@@ -689,7 +706,7 @@ func measureTCPParallelAddresses(t *testing.T, from, to netns.NsHandle, local, r
 				clientDone <- err
 				return
 			}
-			defer conn.Close()
+			defer closeNetNSResource(conn)
 			if err := conn.SetDeadline(time.Now().Add(60 * time.Second)); err != nil {
 				clientDone <- err
 				return
@@ -1008,34 +1025,30 @@ type underlayCapture struct {
 func startUnderlayCapture(t *testing.T, ns netns.NsHandle, ifname string) *underlayCapture {
 	t.Helper()
 	capture := &underlayCapture{fd: -1, done: make(chan struct{})}
-	var setupErr error
-	inNetNS(t, ns, func() error {
+	if err := withNetNS(ns, func() error {
 		fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_IP)))
 		if err != nil {
-			setupErr = err
-			return nil
+			return err
 		}
+		defer func() {
+			if capture.fd < 0 {
+				_ = unix.Close(fd)
+			}
+		}()
 		link, err := netlink.LinkByName(ifname)
 		if err != nil {
-			_ = unix.Close(fd)
-			setupErr = err
-			return nil
+			return err
 		}
 		if err := unix.Bind(fd, &unix.SockaddrLinklayer{Protocol: htons(unix.ETH_P_IP), Ifindex: link.Attrs().Index}); err != nil {
-			_ = unix.Close(fd)
-			setupErr = err
-			return nil
+			return err
 		}
 		if err := unix.SetNonblock(fd, true); err != nil {
-			_ = unix.Close(fd)
-			setupErr = err
-			return nil
+			return err
 		}
 		capture.fd = fd
 		return nil
-	})
-	if setupErr != nil {
-		t.Fatalf("capture underlay veth: %v", setupErr)
+	}); err != nil {
+		t.Fatalf("capture underlay veth: %v", err)
 	}
 	go capture.readLoop()
 	t.Cleanup(capture.close)
@@ -1137,8 +1150,25 @@ func writeNetNSConfig(t *testing.T, path, private, peer string, port int, endpoi
 		mtu = parsed
 	}
 	extra := ""
+	if raw := os.Getenv("WGF_NETNS_UDP_BATCH_SIZE"); raw != "" {
+		batch, err := strconv.Atoi(raw)
+		if err != nil || (batch != 128 && batch != 256) {
+			t.Fatalf("invalid WGF_NETNS_UDP_BATCH_SIZE %q; want 128 or 256", raw)
+		}
+		extra += fmt.Sprintf("WGFUDPBatchSize = %d\n", batch)
+	}
 	if slots := os.Getenv("WGF_NETNS_SLOTS"); slots != "" {
-		extra = "WGFReassemblySlots = " + slots + "\n"
+		extra += "WGFReassemblySlots = " + slots + "\n"
+	}
+	// A known search ceiling makes repeated throughput comparisons cheaper
+	// without bypassing CONTROL or PMTU confirmation. The default still tests
+	// discovery from the full production ceiling.
+	if raw := os.Getenv("WGF_NETNS_MAX_CARRIER_PAYLOAD"); raw != "" {
+		ceiling, err := strconv.Atoi(raw)
+		if err != nil || ceiling < 613 || ceiling > 65448 {
+			t.Fatalf("invalid WGF_NETNS_MAX_CARRIER_PAYLOAD %q; want 613..65448", raw)
+		}
+		extra += fmt.Sprintf("WGFMaxCarrierPayload = %d\n", ceiling)
 	}
 	contents := fmt.Sprintf("[Interface]\nPrivateKey = %s\nListenPort = %d\nMTU = %d\n"+extra+"\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = %s\n", private, port, mtu, peer, endpoint, allowed)
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
