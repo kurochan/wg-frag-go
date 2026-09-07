@@ -106,20 +106,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-  launchpad-approval:
-    name: Approve release
-    runs-on: ubuntu-latest
-    environment:
-      name: launchpad
-    permissions: {}
-    steps:
-      # The launchpad environment provides the required reviewer gate.
-      - name: Confirm release approval
-        run: ':'
-
   release:
     name: Publish GitHub Release
-    needs: [verify, verify-macos, launchpad-approval]
+    needs: [verify, verify-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -164,7 +153,6 @@ jobs:
 
   ppa-build:
     name: Build Launchpad PPA source (${{ matrix.series }})
-    needs: [verify, verify-macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
