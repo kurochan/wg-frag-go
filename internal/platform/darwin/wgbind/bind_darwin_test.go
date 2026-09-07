@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,6 +69,55 @@ func TestPathEventHandler(t *testing.T) {
 	bind.notifyPathEvent(want)
 	if event := <-got; event != want {
 		t.Fatalf("event = %#v, want %#v", event, want)
+	}
+}
+
+func TestEndpointCacheReusesAndReplaces(t *testing.T) {
+	t.Parallel()
+	var cache endpointCache
+	firstAddr := netip.MustParseAddrPort("192.0.2.1:51820")
+	first := cache.get(firstAddr)
+	if same := cache.get(firstAddr); same != first {
+		t.Fatal("same source did not reuse its Endpoint")
+	}
+	second := cache.get(netip.MustParseAddrPort("192.0.2.2:51820"))
+	if second == first {
+		t.Fatal("changed source reused the previous Endpoint")
+	}
+	if first.addr != firstAddr || second.addr == firstAddr {
+		t.Fatalf("cache changed Endpoint contents: first=%v second=%v", first.addr, second.addr)
+	}
+}
+
+func TestEndpointCacheIsConcurrentSafe(t *testing.T) {
+	t.Parallel()
+	var cache endpointCache
+	const workers = 32
+	addr := netip.MustParseAddrPort("192.0.2.3:51820")
+	start := make(chan struct{})
+	endpoints := make(chan *Endpoint, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			endpoints <- cache.get(addr)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(endpoints)
+
+	var first *Endpoint
+	for endpoint := range endpoints {
+		if first == nil {
+			first = endpoint
+			continue
+		}
+		if endpoint != first {
+			t.Fatal("concurrent same-source lookups returned different Endpoints")
+		}
 	}
 }
 

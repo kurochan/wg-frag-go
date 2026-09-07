@@ -45,6 +45,26 @@ type Endpoint struct {
 	addr netip.AddrPort
 }
 
+type endpointCache struct {
+	mu       sync.Mutex
+	addr     netip.AddrPort
+	endpoint *Endpoint
+}
+
+func (c *endpointCache) get(addr netip.AddrPort) *Endpoint {
+	c.mu.Lock()
+	if c.endpoint != nil && c.addr == addr {
+		endpoint := c.endpoint
+		c.mu.Unlock()
+		return endpoint
+	}
+	c.addr = addr
+	c.endpoint = &Endpoint{addr: addr}
+	endpoint := c.endpoint
+	c.mu.Unlock()
+	return endpoint
+}
+
 // New returns a closed macOS Bind.
 func New() *Bind { return &Bind{} }
 
@@ -184,6 +204,7 @@ func applySocketBuffer(socket *net.UDPConn, size int) int {
 }
 
 func receive(socket *net.UDPConn) conn.ReceiveFunc {
+	var cache endpointCache
 	return func(packets [][]byte, sizes []int, endpoints []conn.Endpoint) (int, error) {
 		if len(packets) == 0 || len(sizes) < 1 || len(endpoints) < 1 {
 			return 0, io.ErrShortBuffer
@@ -196,7 +217,7 @@ func receive(socket *net.UDPConn) conn.ReceiveFunc {
 			return 0, err
 		}
 		sizes[0] = size
-		endpoints[0] = &Endpoint{addr: remote}
+		endpoints[0] = cache.get(remote)
 		return 1, nil
 	}
 }
