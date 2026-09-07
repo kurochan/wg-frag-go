@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.7.4 - 2026-09-07T14:26:04Z
+
+<!-- debian: urgency=medium -->
+
+- Avoid duplicate Launchpad approvals by keeping the protected environment on PPA publication only, while allowing PPA source builds to run in parallel with release verification and GitHub Release creation.
+
 ## 0.7.3 - 2026-09-07T14:09:33Z
 
 <!-- debian: urgency=medium -->
