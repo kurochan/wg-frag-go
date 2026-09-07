@@ -4,15 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 )
 
 // Sample is one metric value with its labels.
 type Sample struct {
-	Name   string
-	Labels map[string]string
-	Value  uint64
+	Name       string
+	Labels     map[string]string
+	Value      uint64
+	FloatValue float64
+	IsFloat    bool
 }
 
 // InterfaceSnapshot is a request-time view of one WGF interface.
@@ -102,7 +105,7 @@ func writeScopedSample(w io.Writer, descriptor Descriptor, sample Sample, iface 
 	if err := validateScopedLabels(descriptor.Scope, labels); err != nil {
 		return fmt.Errorf("metric %s: %w", sample.Name, err)
 	}
-	if err := writeSample(w, sample.Name, labels, sample.Value); err != nil {
+	if err := writeSample(w, sample, labels); err != nil {
 		return err
 	}
 	return nil
@@ -145,8 +148,8 @@ func hasNonEmptyLabel(labels map[string]string, name string) bool {
 	return labels[name] != ""
 }
 
-func writeSample(w io.Writer, name string, labels map[string]string, value uint64) error {
-	if _, err := io.WriteString(w, name); err != nil {
+func writeSample(w io.Writer, sample Sample, labels map[string]string) error {
+	if _, err := io.WriteString(w, sample.Name); err != nil {
 		return err
 	}
 	if len(labels) != 0 {
@@ -172,7 +175,14 @@ func writeSample(w io.Writer, name string, labels map[string]string, value uint6
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, " %d\n", value)
+	if sample.IsFloat {
+		if math.IsNaN(sample.FloatValue) || math.IsInf(sample.FloatValue, 0) {
+			return fmt.Errorf("metric %s has a non-finite value", sample.Name)
+		}
+		_, err := fmt.Fprintf(w, " %g\n", sample.FloatValue)
+		return err
+	}
+	_, err := fmt.Fprintf(w, " %d\n", sample.Value)
 	return err
 }
 

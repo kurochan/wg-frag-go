@@ -67,6 +67,32 @@ func TestWriteOpenMetrics(t *testing.T) {
 	}
 }
 
+func TestWriteOpenMetricsFloatSample(t *testing.T) {
+	t.Parallel()
+	selector, err := NewSelector([]string{"wgf_go_mem_stats_gc_cpu_seconds_total"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	err = WriteOpenMetrics(&output, selector, Snapshot{Samples: []Sample{{
+		Name:       "wgf_go_mem_stats_gc_cpu_seconds_total",
+		FloatValue: 1.25,
+		IsFloat:    true,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{
+		"# TYPE wgf_go_mem_stats_gc_cpu_seconds counter\n",
+		"wgf_go_mem_stats_gc_cpu_seconds_total 1.25\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestWriteOpenMetricsMultipleInterfacesUsesOneSchema(t *testing.T) {
 	t.Parallel()
 	selector, err := NewSelector([]string{"wgf_tx_carriers_total", "wgf_peer_pmtu_searching"}, nil)

@@ -34,7 +34,10 @@ func (manager *Manager) metricsSnapshot() metrics.Snapshot {
 			"commit":     version.Commit,
 			"go_version": runtime.Version(),
 		},
-		Samples: []metrics.Sample{{Name: "wgf_manager_interfaces", Value: uint64(len(items))}},
+		Samples: append(metrics.RuntimeSamples(), metrics.Sample{
+			Name:  "wgf_manager_interfaces",
+			Value: uint64(len(items)),
+		}),
 	}
 	for _, supervisor := range items {
 		if current, ok := supervisor.metricsSnapshot(); ok {

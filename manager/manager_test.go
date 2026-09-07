@@ -135,6 +135,9 @@ func TestManagerMetricsSchemaIsStableForSingleAndMultipleInterfaces(t *testing.T
 
 	for _, want := range []string{
 		"wgf_manager_interfaces 1\n",
+		"wgf_go_num_goroutine ",
+		"wgf_go_gomaxprocs ",
+		"wgf_go_mem_stats_heap_alloc ",
 		"wgf_tx_carriers_total{interface=\"wgf0\",interface_id=\"",
 		"wgf_rx_data_carriers_total{interface=\"wgf0\",interface_id=\"",
 	} {
