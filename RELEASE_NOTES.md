@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.7.2 - 2026-09-07T14:00:24Z
+
+<!-- debian: urgency=medium -->
+
+- Require approval through the Launchpad environment before release verification and publication, with the approval gate using no repository token permissions.
+
 ## 0.7.1 - 2026-09-07T13:43:32Z
 
 <!-- debian: urgency=medium -->

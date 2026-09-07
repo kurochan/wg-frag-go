@@ -1,3 +1,11 @@
+wg-frag-go (0.7.2-1) noble; urgency=medium
+
+  * Require approval through the Launchpad environment before release
+    verification and publication, with the approval gate using no repository
+    token permissions.
+
+ -- kurochan <kuro@kurochan.org>  Mon, 07 Sep 2026 14:00:24 +0000
+
 wg-frag-go (0.7.1-1) noble; urgency=medium
 
   * Reduce steady-state UDP receive overhead on Linux and macOS by reusing
