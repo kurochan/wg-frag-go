@@ -1,3 +1,11 @@
+wg-frag-go (0.7.4-1) noble; urgency=medium
+
+  * Avoid duplicate Launchpad approvals by keeping the protected environment on
+    PPA publication only, while allowing PPA source builds to run in parallel
+    with release verification and GitHub Release creation.
+
+ -- kurochan <kuro@kurochan.org>  Mon, 07 Sep 2026 14:26:04 +0000
+
 wg-frag-go (0.7.3-1) noble; urgency=medium
 
   * Shorten the release workflow critical path by running Launchpad approval,
