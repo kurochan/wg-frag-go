@@ -122,8 +122,24 @@ func newEndpoint(addr netip.AddrPort) *Endpoint {
 	return endpoint
 }
 
-func newEndpointFromUDP(addr *net.UDPAddr) *Endpoint {
-	return newEndpoint(addr.AddrPort())
+type endpointCache struct {
+	mu       sync.Mutex
+	addr     netip.AddrPort
+	endpoint *Endpoint
+}
+
+func (c *endpointCache) get(addr netip.AddrPort) *Endpoint {
+	c.mu.Lock()
+	if c.endpoint != nil && c.addr == addr {
+		endpoint := c.endpoint
+		c.mu.Unlock()
+		return endpoint
+	}
+	c.addr = addr
+	c.endpoint = newEndpoint(addr)
+	endpoint := c.endpoint
+	c.mu.Unlock()
+	return endpoint
 }
 
 // New returns a closed Linux Bind.
@@ -447,6 +463,7 @@ type batchWriter interface {
 }
 
 func (b *Bind) receive(socket *net.UDPConn, reader batchReader, rxOffload bool) conn.ReceiveFunc {
+	var cache endpointCache
 	return func(packets [][]byte, sizes []int, endpoints []conn.Endpoint) (int, error) {
 		if len(packets) < 1 || len(sizes) < len(packets) || len(endpoints) < len(packets) {
 			return 0, io.ErrShortBuffer
@@ -493,7 +510,7 @@ func (b *Bind) receive(socket *net.UDPConn, reader batchReader, rxOffload bool) 
 					return 0, readErr
 				}
 				sizes[0] = size
-				endpoints[0] = newEndpoint(remote)
+				endpoints[0] = cache.get(remote)
 				return 1, nil
 			}
 			if errors.Is(err, net.ErrClosed) {
@@ -530,7 +547,7 @@ func (b *Bind) receive(socket *net.UDPConn, reader batchReader, rxOffload bool) 
 			if !ok {
 				return 0, fmt.Errorf("wgbind: unexpected peer address type %T", msg.Addr)
 			}
-			endpoints[i] = newEndpointFromUDP(addr)
+			endpoints[i] = cache.get(addr.AddrPort())
 		}
 		return n, nil
 	}

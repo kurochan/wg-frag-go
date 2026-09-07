@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -273,6 +274,9 @@ func TestReceiveSplitsFullConfiguredGROBatch(t *testing.T) {
 		if sizes[i] != 4 || packets[i][0] != byte(i/64) || packets[i][1] != byte(i%64) {
 			t.Fatalf("packet %d = (%d, %x), want size 4 and marker (%d, %d)", i, sizes[i], packets[i], i/64, i%64)
 		}
+		if i > 0 && endpoints[i] != endpoints[0] {
+			t.Fatalf("packet %d endpoint pointer differs for the same source", i)
+		}
 	}
 }
 
@@ -324,6 +328,97 @@ func (fullGROBatchReader) ReadBatch(messages []ipv4.Message, _ int) (int, error)
 		messages[i].Addr = &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 51820}
 	}
 	return len(messages), nil
+}
+
+type sourceBatchReader struct {
+	addr netip.AddrPort
+}
+
+func (r *sourceBatchReader) ReadBatch(messages []ipv4.Message, _ int) (int, error) {
+	messages[0].N = copy(messages[0].Buffers[0], []byte("x"))
+	messages[0].Addr = &net.UDPAddr{
+		IP:   net.IP(r.addr.Addr().AsSlice()),
+		Port: int(r.addr.Port()),
+	}
+	return 1, nil
+}
+
+func TestReceiveCachesOneEndpointPerSource(t *testing.T) {
+	t.Parallel()
+	bind := New()
+	reader := &sourceBatchReader{addr: netip.MustParseAddrPort("192.0.2.1:51820")}
+	receiver := bind.receive(nil, reader, false)
+
+	receive := func() conn.Endpoint {
+		packets := [][]byte{make([]byte, 8)}
+		sizes := make([]int, 1)
+		endpoints := make([]conn.Endpoint, 1)
+		n, err := receiver(packets, sizes, endpoints)
+		if err != nil || n != 1 {
+			t.Fatalf("receive() = (%d, %v), want (1, nil)", n, err)
+		}
+		return endpoints[0]
+	}
+
+	first := receive()
+	if same := receive(); same != first {
+		t.Fatal("same source did not reuse its Endpoint")
+	}
+	if got := first.DstToString(); got != "192.0.2.1:51820" {
+		t.Fatalf("cached Endpoint destination = %q", got)
+	}
+
+	reader.addr = netip.MustParseAddrPort("192.0.2.2:51820")
+	second := receive()
+	if second == first {
+		t.Fatal("changed source reused the previous Endpoint")
+	}
+	if got := first.DstToString(); got != "192.0.2.1:51820" {
+		t.Fatalf("previous Endpoint changed after source update: %q", got)
+	}
+	if got := second.DstToString(); got != "192.0.2.2:51820" {
+		t.Fatalf("new Endpoint destination = %q", got)
+	}
+}
+
+func TestReceiveEndpointCacheIsConcurrentSafe(t *testing.T) {
+	t.Parallel()
+	bind := New()
+	receiver := bind.receive(nil, &sourceBatchReader{addr: netip.MustParseAddrPort("192.0.2.3:51820")}, false)
+	const workers = 32
+	start := make(chan struct{})
+	endpoints := make(chan conn.Endpoint, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			packets := [][]byte{make([]byte, 8)}
+			sizes := make([]int, 1)
+			result := make([]conn.Endpoint, 1)
+			n, err := receiver(packets, sizes, result)
+			if err != nil || n != 1 {
+				t.Errorf("receive() = (%d, %v), want (1, nil)", n, err)
+				return
+			}
+			endpoints <- result[0]
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(endpoints)
+
+	var first conn.Endpoint
+	for endpoint := range endpoints {
+		if first == nil {
+			first = endpoint
+			continue
+		}
+		if endpoint != first {
+			t.Fatal("concurrent same-source receives returned different Endpoints")
+		}
+	}
 }
 
 func TestReceiveAcceptsWireGuardBatch(t *testing.T) {
