@@ -34,6 +34,14 @@ const (
 var Descriptors = []Descriptor{
 	processGauge("wgf_build_info", "Build information for the running WGF binary."),
 	processGauge("wgf_manager_interfaces", "Interfaces currently managed by this WGF process."),
+	processGauge("wgf_go_num_goroutine", "Number of goroutines currently running."),
+	processGauge("wgf_go_gomaxprocs", "Maximum number of processors that can execute Go code simultaneously."),
+	processCounter("wgf_go_mem_stats_num_gc_total", "Completed garbage collection cycles."),
+	processCounter("wgf_go_mem_stats_gc_cpu_seconds_total", "Cumulative CPU time spent performing garbage collection tasks, in seconds."),
+	processGauge("wgf_go_mem_stats_heap_alloc", "Bytes of allocated heap objects that remain in use."),
+	processGauge("wgf_go_mem_stats_heap_objects", "Number of allocated heap objects."),
+	processCounter("wgf_go_mem_stats_total_alloc_bytes_total", "Cumulative bytes allocated to the Go heap, including bytes later freed."),
+	processCounter("wgf_go_mem_stats_frees_bytes_total", "Cumulative bytes freed from the Go heap by garbage collection."),
 	interfaceCounter("wgf_tx_carriers_total", "DATA carriers transmitted by the shim."),
 	interfaceCounter("wgf_tx_packet_drops_total", "Inner packets dropped before transmission."),
 	interfaceCounter("wgf_tx_native_fragment_drops_total", "Native IP fragments dropped on transmit."),
@@ -63,6 +71,10 @@ var Descriptors = []Descriptor{
 
 func processGauge(name, help string) Descriptor {
 	return Descriptor{Name: name, Family: name, Help: help, Type: "gauge", Scope: ScopeProcess}
+}
+
+func processCounter(name, help string) Descriptor {
+	return Descriptor{Name: name, Family: strings.TrimSuffix(name, "_total"), Help: help, Type: "counter", Scope: ScopeProcess}
 }
 
 func interfaceCounter(name, help string) Descriptor {

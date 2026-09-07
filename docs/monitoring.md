@@ -69,7 +69,7 @@ Metrics are grouped by scope:
 | Scope | Metrics | Labels |
 | --- | --- | --- |
 | Process | `wgf_build_info` | `version`, `commit`, `go_version` |
-| Process | `wgf_manager_interfaces` | none |
+| Process | `wgf_manager_interfaces`, `wgf_go_*` | none |
 | Interface | `wgf_tx_*`, `wgf_rx_*`, `wgf_carrier_*`, `wgf_control_*`, `wgf_preconfirm_drops_total`, `wgf_reassembly_expirations_total`, `wgf_udp_socket_drops_total` | `interface`, `interface_id` |
 | Peer | `wgf_peer_pmtu_*`, `wgf_peer_data_forwarding_enabled` | `interface`, `interface_id`, `peer_id` |
 
@@ -93,6 +93,14 @@ names.
 | --- | --- | --- |
 | `wgf_build_info` | gauge | Build and Go runtime information. |
 | `wgf_manager_interfaces` | gauge | Interfaces currently managed by the process. |
+| `wgf_go_num_goroutine` | gauge | Number of live goroutines. |
+| `wgf_go_gomaxprocs` | gauge | Current GOMAXPROCS limit. |
+| `wgf_go_mem_stats_num_gc_total` | counter | Completed GC cycles. |
+| `wgf_go_mem_stats_gc_cpu_seconds_total` | counter | Cumulative CPU seconds spent in GC. |
+| `wgf_go_mem_stats_heap_alloc` | gauge | Bytes of allocated heap objects still in use. |
+| `wgf_go_mem_stats_heap_objects` | gauge | Number of allocated heap objects. |
+| `wgf_go_mem_stats_total_alloc_bytes_total` | counter | Cumulative bytes allocated, including bytes later freed. |
+| `wgf_go_mem_stats_frees_bytes_total` | counter | Cumulative bytes freed by GC. |
 
 ### Interface
 
