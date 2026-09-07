@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.7.3 - 2026-09-07T14:09:33Z
+
+<!-- debian: urgency=medium -->
+
+- Shorten the release workflow critical path by running Launchpad approval, source verification, and PPA source builds in parallel while keeping GitHub Release and PPA publication gated on their required checks.
+
 ## 0.7.2 - 2026-09-07T14:00:24Z
 
 <!-- debian: urgency=medium -->
