@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.7.1 - 2026-09-07T13:43:32Z
+
+<!-- debian: urgency=medium -->
+
+- Reduce steady-state UDP receive overhead on Linux and macOS by reusing endpoint objects for repeated source addresses while safely replacing them when a peer roams.
+- Extend the process-wide OpenMetrics endpoint with Go runtime gauges and counters for goroutines, GOMAXPROCS, garbage collection, heap usage, and allocation activity; these values are collected at scrape time without entering the packet path.
+
 ## 0.7.0 - 2026-09-05T16:05:43Z
 
 <!-- debian: urgency=medium -->
